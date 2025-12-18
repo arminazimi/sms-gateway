@@ -4,11 +4,13 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ec1089bf-d736-41cd-bde2-592108a60ef4" name="Changes" comment="update workspace configuration and improve handler imports">
+    <list default="true" id="ec1089bf-d736-41cd-bde2-592108a60ef4" name="Changes" comment="add balance retrieval and transaction history endpoints">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/app/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmd/api/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/api/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/balance/handler.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/balance/handler.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/balance/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/balance/service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/sms/handler.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/sms/handler.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -160,7 +162,8 @@
     <MESSAGE value="add balance retrieval endpoint and update server initialization" />
     <MESSAGE value="update workspace configuration and fix XML formatting issues" />
     <MESSAGE value="update workspace configuration and improve handler imports" />
-    <option name="LAST_COMMIT_MESSAGE" value="update workspace configuration and improve handler imports" />
+    <MESSAGE value="add balance retrieval and transaction history endpoints" />
+    <option name="LAST_COMMIT_MESSAGE" value="add balance retrieval and transaction history endpoints" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

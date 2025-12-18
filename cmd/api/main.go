@@ -10,8 +10,12 @@ import (
 func main() {
 	app.Init()
 
+	// sms
 	app.Echo.POST("/sms/send", sms.SendHandler)
-	app.Echo.GET("/balance", balance.GetBalanceAndHistory)
+
+	// balance
+	app.Echo.GET("/balance", balance.GetBalanceAndHistoryHandler)
+	app.Echo.POST("/balance/add", balance.AddBalanceHandler)
 
 	if err := app.Echo.Start(config.AppListenAddr); err != nil {
 		panic(err)

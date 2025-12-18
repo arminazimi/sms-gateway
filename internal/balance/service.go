@@ -13,6 +13,7 @@ type transactionType string
 
 const (
 	Withdrawal transactionType = "withdrawal"
+	Deposit    transactionType = "deposit"
 )
 
 type UserHasEnoughBalanceRequest struct {
@@ -132,4 +133,55 @@ func getPricePerType(t model.Type) int {
 
 func descriptionGenerator(t model.Type, q int) string {
 	return fmt.Sprintf("بابت خرید %d پیامک تایپ %s", q, t)
+}
+
+type AddBalanceRequest struct {
+	CustomerID  int64
+	Amount      uint64
+	Description string
+}
+
+func AddBalance(ctx context.Context, req AddBalanceRequest) (err error) {
+	tx, err := app.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	const increaseBalanceQuery = `UPDATE user_balances SET balance = balance + ? WHERE user_id = ?`
+	res, err := tx.ExecContext(ctx, increaseBalanceQuery, req.Amount, req.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		const insertBalanceQuery = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
+		if _, err = tx.ExecContext(ctx, insertBalanceQuery, req.CustomerID, req.Amount); err != nil {
+			return err
+		}
+	}
+
+	description := req.Description
+	if description == "" {
+		description = fmt.Sprintf("افزایش موجودی به میزان %d", req.Amount)
+	}
+
+	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`
+	if _, err = tx.ExecContext(ctx, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
 }

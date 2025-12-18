@@ -39,8 +39,7 @@ func initDB() {
 	if err != nil {
 		panic(err)
 	}
-	// migrate
-	// seed
+	//TODO: migrate
 }
 
 func initEcho() {
