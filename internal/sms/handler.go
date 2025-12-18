@@ -25,13 +25,13 @@ func SendHandler(c echo.Context) error {
 	app.Logger.Info("", "s", s)
 
 	// check user balance
-	hasBalance, err := balance.UserHasEnoughBalance(c.Request().Context(), balance.UserHasEnoughBalanceRequest{
+	hasBalance, err := balance.UserHasBalance(c.Request().Context(), balance.UserHasEnoughBalanceRequest{
 		CustomerID: s.CustomerID,
 		Quantity:   len(s.Recipients),
 		Type:       s.Type,
 	})
 	if err != nil {
-		app.Logger.Error("UserHasEnoughBalance ", "err", err)
+		app.Logger.Error("UserHasBalance ", "err", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
 	}
 	if !hasBalance {
@@ -39,10 +39,15 @@ func SendHandler(c echo.Context) error {
 		return c.JSON(http.StatusPaymentRequired, map[string]string{"error": "dont have "})
 	}
 
-	app.Logger.Info("user has Enough Balance", "s", s)
+	if err := balance.DeductBalance(c.Request().Context(), balance.DeductBalanceRequest{
+		CustomerID: s.CustomerID,
+		Quantity:   len(s.Recipients),
+		Type:       s.Type,
+	}); err != nil {
+		app.Logger.Error("DeductBalance ", "err", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+	}
 
-	// if not ok return err
-	//else cut down the balance
 	//then send it in quew
 
 	return c.JSON(http.StatusOK, nil)
