@@ -4,9 +4,11 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ec1089bf-d736-41cd-bde2-592108a60ef4" name="Changes" comment="update workspace configuration and fix XML formatting issues">
+    <list default="true" id="ec1089bf-d736-41cd-bde2-592108a60ef4" name="Changes" comment="update workspace configuration and improve handler imports">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/balance/handler.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/balance/handler.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/balance/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/balance/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/sms/handler.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/sms/handler.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -157,7 +159,8 @@
     <MESSAGE value="refactor database connection and balance management logic" />
     <MESSAGE value="add balance retrieval endpoint and update server initialization" />
     <MESSAGE value="update workspace configuration and fix XML formatting issues" />
-    <option name="LAST_COMMIT_MESSAGE" value="update workspace configuration and fix XML formatting issues" />
+    <MESSAGE value="update workspace configuration and improve handler imports" />
+    <option name="LAST_COMMIT_MESSAGE" value="update workspace configuration and improve handler imports" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

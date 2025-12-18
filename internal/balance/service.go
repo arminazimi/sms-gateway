@@ -86,6 +86,38 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
 	return nil
 }
 
+type UserTransaction struct {
+	UserID          int64           `db:"user_id" json:"-"`
+	Amount          int64           `db:"amount"`
+	TransactionType transactionType `db:"transaction_type"`
+	Description     string          `db:"description"`
+}
+
+func GetUserTransactions(ctx context.Context, userID string) ([]UserTransaction, error) {
+	const query = `SELECT user_id, amount, transaction_type, description FROM user_transactions WHERE user_id = ?`
+
+	var transactions []UserTransaction
+	if err := app.DB.SelectContext(ctx, &transactions, query, userID); err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}
+
+func GetUserBalance(ctx context.Context, userID string) (int64, error) {
+
+	const query = `SELECT balance FROM user_balances WHERE user_id = ?`
+	var balance int64
+	if err := app.DB.QueryRowxContext(ctx, query, userID).Scan(&balance); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	return balance, nil
+}
+
 func calculatePrice(Type model.Type, Quantity int) int64 {
 	return int64(getPricePerType(Type) * Quantity)
 }
