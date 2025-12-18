@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: sms_gateway_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: sms_gateway
+      MYSQL_USER: sms_user
+      MYSQL_PASSWORD: sms_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+

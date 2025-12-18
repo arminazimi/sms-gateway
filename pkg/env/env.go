@@ -46,14 +46,3 @@ func RequiredNotEmpty(key string) string {
 	}
 	return value
 }
-
-func Required(key string) string {
-	_, osSet := os.LookupEnv(key)
-	_, dotEnvSet := dotEnvMap[key]
-	if !osSet && !dotEnvSet {
-		if !testing.Testing() {
-			panic(fmt.Sprintf("`%s` is not set", key))
-		}
-	}
-	return getEnv(key)
-}
