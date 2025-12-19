@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"sms-gateway/app"
+	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
+	amqp "sms-gateway/pkg/queue"
 
 	"github.com/labstack/echo/v4"
 )
@@ -22,8 +24,6 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "zero recipients")
 	}
 
-	app.Logger.Info("", "s", s)
-
 	// check user balance
 	hasBalance, err := balance.UserHasBalance(c.Request().Context(), balance.UserHasEnoughBalanceRequest{
 		CustomerID: s.CustomerID,
@@ -35,7 +35,7 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	if !hasBalance {
-		app.Logger.Info("User Has Not Enough Balance ", "user id ", s.CustomerID)
+		app.Logger.Error("User Has Not Enough Balance ", "user id ", s.CustomerID)
 		return echo.NewHTTPError(http.StatusPaymentRequired, "dont have Not Enough Balance ")
 	}
 
@@ -48,7 +48,31 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	//then send it in quew
+	b, err := json.Marshal(s)
+	if err != nil {
+		app.Logger.Error(" err in marshal", "user id ", s.CustomerID)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
 
-	return c.JSON(http.StatusOK, nil)
+	if err = app.Rabbit.PublishContext(c.Request().Context(), amqp.PublishRequest{
+		Exchange: config.SmsExchange,
+		Key:      getQueue(s.Type),
+		Msg:      b,
+	}); err != nil {
+		app.Logger.Error(" err in publish", "user id ", s.CustomerID)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
+	return c.JSON(http.StatusOK, "your msg is processing")
+}
+
+func getQueue(s model.Type) string {
+	switch s {
+	case model.NORMAL:
+		return config.NormalQueue
+	case model.EXPRESS:
+		return config.ExpressQueue
+	default:
+		return config.NormalQueue
+	}
 }

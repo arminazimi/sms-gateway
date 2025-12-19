@@ -15,6 +15,9 @@ var (
 	DBPort        int
 	DBName        string
 	RabbitmqUri   string
+	SmsExchange   string
+	ExpressQueue  string
+	NormalQueue   string
 )
 
 func init() {
@@ -30,4 +33,7 @@ func init() {
 	DBPort = port
 	DBName = env.RequiredNotEmpty("DB_NAME")
 	RabbitmqUri = env.RequiredNotEmpty("RABBIT_URI")
+	SmsExchange = env.RequiredNotEmpty("RABBIT_SMS_EXCHANGE")
+	ExpressQueue = env.RequiredNotEmpty("EXPRESS_QUEUE")
+	NormalQueue = env.RequiredNotEmpty("NORMAL_QUEUE")
 }

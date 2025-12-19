@@ -5,10 +5,14 @@ import (
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/sms"
+
+	"github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
 	app.Init()
+
+	CreateHermesAndIVRQueue()
 
 	// sms
 	app.Echo.POST("/sms/send", sms.SendHandler)
@@ -18,6 +22,51 @@ func main() {
 	app.Echo.POST("/balance/add", balance.AddBalanceHandler)
 
 	if err := app.Echo.Start(config.AppListenAddr); err != nil {
+		panic(err)
+	}
+}
+
+func CreateHermesAndIVRQueue() {
+	conn, err := amqp091.DialConfig(config.RabbitmqUri, amqp091.Config{
+		Properties: amqp091.NewConnectionProperties(),
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	defer ch.Close()
+
+	if err = ch.ExchangeDeclare(config.SmsExchange, "direct", true, false, false, false, amqp091.Table{}); err != nil {
+		panic(err)
+	}
+
+	// EXPRESS
+	if _, err = ch.QueueDeclare(config.ExpressQueue, true, false, false, false, amqp091.Table{}); err != nil {
+		panic(err)
+	}
+
+	if err = ch.QueueBind(
+		config.ExpressQueue,
+		config.ExpressQueue,
+		config.SmsExchange, false, amqp091.Table{}); err != nil {
+		panic(err)
+	}
+
+	// Normal
+	if _, err = ch.QueueDeclare(config.NormalQueue, true, false, false, false, amqp091.Table{}); err != nil {
+		panic(err)
+	}
+
+	if err = ch.QueueBind(
+		config.NormalQueue,
+		config.NormalQueue,
+		config.SmsExchange, false, amqp091.Table{}); err != nil {
 		panic(err)
 	}
 }

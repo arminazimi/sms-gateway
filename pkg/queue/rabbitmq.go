@@ -28,7 +28,13 @@ func NewRabbitConnection(rabbitURI string) (*RabbitConnection, error) {
 	return &RabbitConnection{Conn: conn}, nil
 }
 
-func (rp *RabbitConnection) PublishContext(ctx context.Context, exchange string, key string, msg []byte) error {
+type PublishRequest struct {
+	Exchange string
+	Key      string
+	Msg      []byte
+}
+
+func (rp *RabbitConnection) PublishContext(ctx context.Context, req PublishRequest) error {
 	ch, err := rp.Conn.Channel()
 	if err != nil {
 		slog.Error("cannot create channel from rabbit mq connection", "err", err)
@@ -41,11 +47,10 @@ func (rp *RabbitConnection) PublishContext(ctx context.Context, exchange string,
 		}
 	}()
 
-	err = ch.PublishWithContext(ctx, exchange, key, false, false, amqp091.Publishing{
+	if err = ch.PublishWithContext(ctx, req.Exchange, req.Key, false, false, amqp091.Publishing{
 		Timestamp: time.Now(),
-		Body:      msg,
-	})
-	if err != nil {
+		Body:      req.Msg,
+	}); err != nil {
 		return err
 	}
 	return nil
