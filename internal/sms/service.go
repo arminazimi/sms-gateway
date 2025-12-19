@@ -21,6 +21,9 @@ func sendSmsToProvider(ctx context.Context, s model.SMS) error {
 		return err
 	}
 
+	if err := UpdateSMS(ctx, s, Done); err != nil {
+		return err
+	}
 	return nil
 }
 
