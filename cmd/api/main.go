@@ -23,6 +23,7 @@ func main() {
 	// Handlers
 	// sms
 	app.Echo.POST("/sms/send", sms.SendHandler)
+	app.Echo.GET("/sms/history", sms.HistoryHandler)
 
 	// balance
 	app.Echo.GET("/balance", balance.GetBalanceAndHistoryHandler)

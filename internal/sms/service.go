@@ -12,9 +12,8 @@ import (
 type State string
 
 const (
-	Init           State = "init"
-	SendToProvider State = "send-to-provider"
-	Done           State = "done"
+	Init State = "init"
+	Done State = "done"
 )
 
 func sendSms(ctx context.Context, s model.SMS) error {
@@ -58,4 +57,25 @@ func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string
 	}
 
 	return nil
+}
+
+type UserHistory struct {
+	UserID    int64      `db:"user_id" json:"user_id"`
+	Type      model.Type `db:"type" json:"type"`
+	Status    State      `db:"status" json:"status"`
+	Recipient string     `db:"recipient" json:"recipient"`
+	Provider  string     `db:"provider" json:"provider"`
+	CreatedAt string     `db:"created_at" json:"created_at"`
+	UpdatedAt string     `db:"updated_at" json:"updated_at"`
+}
+
+func GetUserHistory(ctx context.Context, userID string) ([]UserHistory, error) {
+	const query = `SELECT user_id, type, status, recipient, provider, created_at, updated_at FROM sms_status WHERE user_id = ? ORDER BY created_at DESC`
+
+	var history []UserHistory
+	if err := app.DB.SelectContext(ctx, &history, query, userID); err != nil {
+		return nil, err
+	}
+
+	return history, nil
 }

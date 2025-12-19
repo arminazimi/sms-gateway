@@ -17,7 +17,7 @@ CREATE TABLE sms_status (
         status VARCHAR(50) NOT NULL,
         type  VARCHAR(50) NOT NULL,
         recipient VARCHAR(20) NOT NULL,
-        Provider VARCHAR(50)  NULL,
+        Provider VARCHAR(50)  NOT NULL default '',
         created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB;

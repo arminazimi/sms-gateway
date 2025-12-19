@@ -66,6 +66,24 @@ func SendHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, "your msg is processing")
 }
 
+func HistoryHandler(c echo.Context) error {
+	userID := c.QueryParam("user_id")
+	if userID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "user_id is required")
+	}
+
+	history, err := GetUserHistory(c.Request().Context(), userID)
+	if err != nil {
+		app.Logger.Error("get sms history", "user_id", userID, "err", err)
+		return err
+	}
+
+	out := map[string]any{}
+	out["history"] = history
+
+	return c.JSON(http.StatusOK, out)
+}
+
 func getQueue(s model.Type) string {
 	switch s {
 	case model.NORMAL:

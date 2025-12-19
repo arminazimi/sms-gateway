@@ -21,6 +21,9 @@ func StartConsumers(ctx context.Context) error {
 		config.SmsExchange,
 		10,
 		func(ctx context.Context, evt amqp091.Delivery) error {
+			defer func() {
+				evt.Ack(false)
+			}()
 			var message model.SMS
 			if err := json.Unmarshal(evt.Body, &message); err != nil {
 				app.Logger.Error("cannot unmarshal sms", "error", err)
@@ -46,9 +49,11 @@ func StartConsumers(ctx context.Context) error {
 		config.SmsExchange,
 		10,
 		func(ctx context.Context, evt amqp091.Delivery) error {
+			defer func() {
+				evt.Ack(false)
+			}()
 			var message model.SMS
 			if err := json.Unmarshal(evt.Body, &message); err != nil {
-				evt.Ack(false)
 				app.Logger.Error("cannot unmarshal sms", "error", err)
 				return fmt.Errorf("cannot unmarshal sms : %w", err)
 			}
@@ -56,7 +61,6 @@ func StartConsumers(ctx context.Context) error {
 			app.Logger.Info("got message", "message", message)
 
 			if err := sendSms(ctx, message); err != nil {
-				evt.Ack(false)
 				return err
 			}
 
