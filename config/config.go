@@ -14,6 +14,7 @@ var (
 	DBHost        string
 	DBPort        int
 	DBName        string
+	RabbitmqUri   string
 )
 
 func init() {
@@ -28,4 +29,5 @@ func init() {
 	}
 	DBPort = port
 	DBName = env.RequiredNotEmpty("DB_NAME")
+	RabbitmqUri = env.RequiredNotEmpty("RABBIT_URI")
 }

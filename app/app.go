@@ -5,6 +5,7 @@ import (
 	"os"
 	"sms-gateway/config"
 	"sms-gateway/pkg/db"
+	amqp "sms-gateway/pkg/queue"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
@@ -14,12 +15,14 @@ var (
 	Echo   *echo.Echo
 	Logger *slog.Logger
 	DB     *db.DB
+	Rabbit *amqp.RabbitConnection
 )
 
 func Init() {
 	initLogger()
 	initDB()
 	initEcho()
+	iniRabbit()
 }
 
 func initLogger() {
@@ -40,6 +43,14 @@ func initDB() {
 		panic(err)
 	}
 	//TODO: migrate
+}
+
+func iniRabbit() {
+	var err error
+	Rabbit, err = amqp.NewRabbitConnection(config.RabbitmqUri)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func initEcho() {
