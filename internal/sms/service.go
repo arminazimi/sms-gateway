@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sms-gateway/app"
 	"sms-gateway/internal/model"
+	"sms-gateway/internal/operator"
 	"strings"
 )
 
@@ -16,30 +17,41 @@ const (
 	Done           State = "done"
 )
 
-func sendSmsToProvider(ctx context.Context, s model.SMS) error {
+func sendSms(ctx context.Context, s model.SMS) error {
 	if err := UpdateSMS(ctx, s, Init); err != nil {
 		return err
 	}
 
-	if err := UpdateSMS(ctx, s, Done); err != nil {
+	provider, err := operator.Send(ctx, s)
+	if err != nil {
 		return err
 	}
+
+	if err := UpdateSMS(ctx, s, Done, provider); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func UpdateSMS(ctx context.Context, s model.SMS, state State) error {
+func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string) error {
 	if len(s.Recipients) == 0 {
 		return errors.New("no  Recipients")
 	}
 
-	valueStrings := make([]string, 0, len(s.Recipients))
-	valueArgs := make([]any, 0, len(s.Recipients)*4)
-	for _, recipient := range s.Recipients {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
-		valueArgs = append(valueArgs, s.CustomerID, s.Type, state, recipient)
+	var providerName string
+	if len(provider) > 0 {
+		providerName = provider[0]
 	}
-	query := `	INSERT INTO sms_status 
-				(user_id,type, status, recipient, created_at, updated_at) 
+
+	valueStrings := make([]string, 0, len(s.Recipients))
+	valueArgs := make([]any, 0, len(s.Recipients)*5)
+	for _, recipient := range s.Recipients {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+		valueArgs = append(valueArgs, s.CustomerID, s.Type, state, recipient, providerName)
+	}
+	query := ` INSERT INTO sms_status 
+				(user_id,type, status, recipient, provider, created_at, updated_at) 
 				VALUES ` + strings.Join(valueStrings, ",")
 	if _, err := app.DB.ExecContext(ctx, query, valueArgs...); err != nil {
 		return err
