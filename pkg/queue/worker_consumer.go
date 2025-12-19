@@ -19,19 +19,6 @@ type ConsumerConfig struct {
 	Prefetch             int
 }
 
-func MakeConsumerFromConfig(c ConsumerConfig) func(ctx context.Context) error {
-	return MakeConsumerWithWorkers(
-		c.AppName,
-		c.RabbitMQURI,
-		c.QueueName,
-		c.RoutingKey,
-		c.Exchange,
-		c.WorkerGoRoutineCount,
-		c.DeliveryHandler,
-		c.Prefetch,
-	)
-}
-
 func MakeConsumerWithWorkers(
 	appName string,
 	rabbitMQURI string,
