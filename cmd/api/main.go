@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"sms-gateway/app"
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
@@ -14,6 +15,12 @@ func main() {
 
 	CreateHermesAndIVRQueue()
 
+	//	Consumers
+	if err := sms.StartConsumers(context.Background()); err != nil {
+		panic(err)
+	}
+
+	// Handlers
 	// sms
 	app.Echo.POST("/sms/send", sms.SendHandler)
 
