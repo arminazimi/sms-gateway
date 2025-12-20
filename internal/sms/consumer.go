@@ -22,7 +22,9 @@ func StartConsumers(ctx context.Context) error {
 		10,
 		func(ctx context.Context, evt amqp091.Delivery) error {
 			defer func() {
-				evt.Ack(false)
+				if err := evt.Ack(false); err != nil {
+					app.Logger.Error("ack failed", "err", err)
+				}
 			}()
 			var message model.SMS
 			if err := json.Unmarshal(evt.Body, &message); err != nil {
@@ -50,7 +52,9 @@ func StartConsumers(ctx context.Context) error {
 		10,
 		func(ctx context.Context, evt amqp091.Delivery) error {
 			defer func() {
-				evt.Ack(false)
+				if err := evt.Ack(false); err != nil {
+					app.Logger.Error("ack failed", "err", err)
+				}
 			}()
 			var message model.SMS
 			if err := json.Unmarshal(evt.Body, &message); err != nil {

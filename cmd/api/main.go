@@ -59,7 +59,10 @@ func CreateHermesAndIVRQueue() {
 		panic(err)
 	}
 
-	defer ch.Close()
+	defer func() {
+		_ = ch.Close()
+		_ = conn.Close()
+	}()
 
 	if err = ch.ExchangeDeclare(config.SmsExchange, "direct", true, false, false, false, amqp091.Table{}); err != nil {
 		panic(err)

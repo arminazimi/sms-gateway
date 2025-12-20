@@ -50,8 +50,7 @@ func (cb *Breaker) Allow() error {
 	defer cb.mu.Unlock()
 
 	now := time.Now()
-	switch cb.state {
-	case StateOpen:
+	if cb.state == StateOpen {
 		if now.Before(cb.reopenDeadline) {
 			return ErrOpen
 		}

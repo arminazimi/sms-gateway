@@ -90,7 +90,11 @@ func MakeConsumerWithWorkers(
 		}
 
 		go func() {
-			defer conn.Conn.Close()
+			defer func() {
+				if err := conn.Conn.Close(); err != nil {
+					slog.Error("cannot close amqp connection", "err", err)
+				}
+			}()
 			var workerIndex int
 			for {
 				if workerIndex > workerCount-1 {
