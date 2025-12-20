@@ -6,20 +6,17 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
-// QueueBinding represents a queue and its routing key binding.
 type QueueBinding struct {
 	Queue      string
 	RoutingKey string
 }
 
-// QueueSetup captures exchange and queue binding configuration.
 type QueueSetup struct {
 	URI      string
 	Exchange string
 	Bindings []QueueBinding
 }
 
-// SetupQueues declares the exchange and binds queues according to the provided setup.
 func SetupQueues(ctx context.Context, cfg QueueSetup) error {
 	conn, err := amqp091.DialConfig(cfg.URI, amqp091.Config{Properties: amqp091.NewConnectionProperties()})
 	if err != nil {
