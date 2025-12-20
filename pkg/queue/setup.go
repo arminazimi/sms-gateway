@@ -25,13 +25,22 @@ func SetupQueues(ctx context.Context, cfg QueueSetup) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		return err
 	}
-	defer ch.Close()
+	defer func() {
+		if closeErr := ch.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	if err = ch.ExchangeDeclare(cfg.Exchange, "direct", true, false, false, false, amqp091.Table{}); err != nil {
 		return err
