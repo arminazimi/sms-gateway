@@ -27,6 +27,8 @@ graph LR
   end
   subgraph Messaging
     MQ[RabbitMQ]
+    QN[NORMAL_QUEUE]
+    QE[EXPRESS_QUEUE]
     Worker[SMS Worker]
   end
   subgraph Providers
@@ -37,7 +39,10 @@ graph LR
 
   Client -->|HTTP /sms| API
   API -->|balance check & deduct| DB
-  API -->|publish SMS| MQ
+  API -->|publish normal| QN
+  API -->|publish express| QE
+  QN --> MQ
+  QE --> MQ
   MQ -->|deliver| Worker
   Worker -->|status/refund| DB
   Worker --> OpA
@@ -84,7 +89,9 @@ graph LR
 - **GET /swagger/***: Swagger UI (served by the API)
 - **GET /metrics**: Prometheus metrics.
 
-- **Swagger UI**  (adjust port to your `LISTEN_ADDR`): `http://localhost:8080/swagger/index.html`
+Routing by type: normal SMS → `NORMAL_QUEUE`; express SMS → `EXPRESS_QUEUE`.
+
+Swagger UI default URL (adjust port to your `LISTEN_ADDR`): `http://localhost:8080/swagger/index.html`
 - **Postman collection:** `postman/collections/Arvan.postman_collection.json`
 
 
@@ -129,7 +136,8 @@ sequenceDiagram
   participant C as Client
   participant API as Echo API
   participant BAL as Balance
-  participant MQ as RabbitMQ
+  participant MQN as NORMAL_QUEUE
+  participant MQE as EXPRESS_QUEUE
   participant W as Worker
   participant A as Operator A
   participant B as Operator B (fallback)
@@ -137,9 +145,14 @@ sequenceDiagram
   C->>API: POST /sms/send (JSON)
   API->>BAL: UserHasBalance?
   API->>BAL: DeductBalance (transaction_id)
-  API->>MQ: Publish SMS (with sms_identifier)
+  alt type == normal
+    API->>MQN: Publish (sms_identifier)
+  else type == express
+    API->>MQE: Publish (sms_identifier)
+  end
   API-->>C: 200 {sms_identifier, status:"processing"}
-  W->>MQ: Consume SMS
+  W->>MQN: Consume (normal)
+  W->>MQE: Consume (express)
   W->>A: Send
   alt A fails or CB open
     W->>B: Send fallback
