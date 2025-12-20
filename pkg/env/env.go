@@ -3,7 +3,6 @@ package env
 import (
 	"fmt"
 	"os"
-
 	"testing"
 
 	"github.com/joho/godotenv"
@@ -12,21 +11,23 @@ import (
 var dotEnvMap map[string]string
 
 func init() {
-	var err error
-	dotEnvMap, err = godotenv.Read(".env")
-	if err != nil {
-		panic(err)
+	// Try to read .env if present; do not panic when missing.
+	if info, err := os.Stat(".env"); err == nil && !info.IsDir() {
+		if m, err := godotenv.Read(".env"); err == nil {
+			dotEnvMap = m
+		}
+	}
+	if dotEnvMap == nil {
+		dotEnvMap = map[string]string{}
 	}
 }
 
 func getEnv(key string) string {
-	// .env
-	value := dotEnvMap[key]
-	// os.Getenv
+	// OS environment has priority over .env
 	if v := os.Getenv(key); v != "" {
-		value = v
+		return v
 	}
-	return value
+	return dotEnvMap[key]
 }
 
 func Default(key, def string) string {

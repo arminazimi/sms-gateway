@@ -38,6 +38,29 @@ services:
       timeout: 5s
       retries: 5
 
+  app:
+    build: .
+    image: sms-gateway:latest
+    container_name: sms_gateway_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      LISTEN_ADDR: ":8080"
+      DB_USER_NAME: sms_user
+      DB_PASSWORD: sms_pass
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: sms_gateway
+      RABBIT_URI: amqp://rabbit_user:rabbit_pass@rabbitmq:5672/
+      RABBIT_SMS_EXCHANGE: sms_exchange
+      EXPRESS_QUEUE: sms_express
+      NORMAL_QUEUE: sms_normal
+    ports:
+      - "8080:8080"
+
 volumes:
   mysql_data:
   rabbitmq_data:
