@@ -21,16 +21,17 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: Install golangci-lint
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.55.2
-
-    - name: Lint
-      run: golangci-lint run ./...
 
     - name: Build
       run: go build -v ./...
+
+    - name: Golangci-lint
+      uses: golangci/golangci-lint-action@v9.2.0
+      with:
+        version: v2.6
+
+#    - name: Lint
+#      run: golangci-lint run ./...
 
     - name: Test
       run: go test -v ./...
