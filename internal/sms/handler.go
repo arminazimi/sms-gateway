@@ -2,12 +2,14 @@ package sms
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sms-gateway/app"
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
 	amqp "sms-gateway/pkg/queue"
+	"sms-gateway/pkg/tracing"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -31,6 +33,9 @@ func SendHandler(c echo.Context) error {
 		app.Logger.Error("invalid input ", "err", err)
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid input")
 	}
+
+	ctxWithUser := tracing.WithUser(c.Request().Context(), fmt.Sprint(s.CustomerID))
+	c.SetRequest(c.Request().WithContext(ctxWithUser))
 
 	if len(s.Recipients) == 0 {
 		app.Logger.Error("zero recipients")

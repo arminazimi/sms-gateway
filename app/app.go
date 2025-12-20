@@ -8,20 +8,23 @@ import (
 	"sms-gateway/pkg/db"
 	"sms-gateway/pkg/metrics"
 	amqp "sms-gateway/pkg/queue"
+	"sms-gateway/pkg/tracing"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
 )
 
 var (
-	Echo   *echo.Echo
-	Logger *slog.Logger
-	DB     *db.DB
-	Rabbit *amqp.RabbitConnection
+	Echo          *echo.Echo
+	Logger        *slog.Logger
+	DB            *db.DB
+	Rabbit        *amqp.RabbitConnection
+	TraceShutdown func(context.Context) error
 )
 
 func Init() {
 	initLogger()
+	initTracing()
 	initDB()
 	initEcho()
 	iniRabbit()
@@ -30,6 +33,15 @@ func Init() {
 func initLogger() {
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})
 	Logger = slog.New(handler)
+}
+
+func initTracing() {
+	shutdown, err := tracing.Init(context.Background(), config.AppName)
+	if err != nil {
+		Logger.Error("tracing init failed", "err", err)
+		return
+	}
+	TraceShutdown = shutdown
 }
 
 func initDB() {
@@ -69,6 +81,19 @@ func iniRabbit() {
 
 func initEcho() {
 	Echo = echo.New()
+	Echo.HideBanner = true
+	Echo.HidePort = true
+	Echo.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ctx, span := tracing.Start(c.Request().Context(), "http.request",
+				tracing.Attr("path", c.Path()),
+				tracing.Attr("method", c.Request().Method),
+			)
+			defer span.End()
+			c.SetRequest(c.Request().WithContext(ctx))
+			return next(c)
+		}
+	})
 	Echo.Use(metrics.EchoMiddleware())
 }
 
@@ -82,6 +107,12 @@ func Shutdown() {
 	if DB != nil {
 		if err := DB.Close(); err != nil {
 			Logger.Error("failed to close db", "err", err)
+		}
+	}
+
+	if TraceShutdown != nil {
+		if err := TraceShutdown(context.Background()); err != nil {
+			Logger.Error("failed to shutdown tracing", "err", err)
 		}
 	}
 }

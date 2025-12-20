@@ -11,6 +11,7 @@ import (
 	operatorB "sms-gateway/internal/operator/operatorB"
 	"sms-gateway/pkg/circuitbreaker"
 	"sms-gateway/pkg/metrics"
+	"sms-gateway/pkg/tracing"
 )
 
 type Operator interface {
@@ -43,6 +44,13 @@ func Send(ctx context.Context, s model.SMS) (string, error) {
 }
 
 func dispatch(ctx context.Context, name string, op Operator, breaker *circuitbreaker.Breaker, s model.SMS) (string, error) {
+	ctx, span := tracing.Start(ctx, "operator.dispatch",
+		tracing.Attr("operator", name),
+		tracing.Attr("type", string(s.Type)),
+		tracing.Attr("user_id", fmt.Sprint(s.CustomerID)),
+	)
+	defer span.End()
+
 	if breaker != nil {
 		if err := breaker.Allow(); err != nil {
 			return "", err

@@ -9,16 +9,27 @@ import (
 	"sms-gateway/internal/model"
 	"sms-gateway/pkg/metrics"
 	amqp "sms-gateway/pkg/queue"
+	"sms-gateway/pkg/tracing"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
 func StartConsumers(ctx context.Context) error {
+	tracer := tracing.Tracer()
 	wrap := func(queue string, fn func(context.Context, amqp091.Delivery) error) func(context.Context, amqp091.Delivery) error {
 		return func(c context.Context, d amqp091.Delivery) error {
+			ctxWithSpan, span := tracer.Start(c, "consumer.process", tracing.WithAttributes(
+				tracing.Attr("queue", queue),
+				tracing.Attr("routing_key", d.RoutingKey),
+			))
+			defer span.End()
 			return metrics.WorkerObserver(queue, func(innerCtx context.Context) error {
+				var msg model.SMS
+				if err := json.Unmarshal(d.Body, &msg); err == nil {
+					innerCtx = tracing.WithUser(innerCtx, fmt.Sprint(msg.CustomerID))
+				}
 				return fn(innerCtx, d)
-			})(c)
+			})(ctxWithSpan)
 		}
 	}
 

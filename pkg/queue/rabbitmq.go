@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"sms-gateway/pkg/metrics"
+	"sms-gateway/pkg/tracing"
 
 	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
@@ -37,6 +38,13 @@ type PublishRequest struct {
 }
 
 func (rp *RabbitConnection) PublishContext(ctx context.Context, req PublishRequest) error {
+	ctx, span := tracing.Start(ctx, "rabbit.publish",
+		tracing.Attr("exchange", req.Exchange),
+		tracing.Attr("routing_key", req.Key),
+		tracing.Attr("user_id", tracing.UserIDFromContext(ctx)),
+	)
+	defer span.End()
+
 	ch, err := rp.Conn.Channel()
 	if err != nil {
 		slog.Error("cannot create channel from rabbit mq connection", "err", err)
@@ -64,6 +72,13 @@ func (rp *RabbitConnection) PublishContext(ctx context.Context, req PublishReque
 
 func (rp *RabbitConnection) ConsumeContext(ctx context.Context, appName string, queueName string, routingKey string, exchangeName string, prefetch int,
 ) (<-chan amqp091.Delivery, error) {
+	ctx, span := tracing.Start(ctx, "rabbit.consume",
+		tracing.Attr("queue", queueName),
+		tracing.Attr("routing_key", routingKey),
+		tracing.Attr("user_id", tracing.UserIDFromContext(ctx)),
+	)
+	defer span.End()
+
 	ch, err := rp.Conn.Channel()
 	if err != nil {
 		slog.Error("cannot create channel from rabbit mq connection", "err", err)

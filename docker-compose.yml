@@ -58,8 +58,20 @@ services:
       RABBIT_SMS_EXCHANGE: sms_exchange
       EXPRESS_QUEUE: sms_express
       NORMAL_QUEUE: sms_normal
+      OTEL_EXPORTER_OTLP_ENDPOINT: localhost:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
     ports:
       - "8080:8080"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
 volumes:
   mysql_data:

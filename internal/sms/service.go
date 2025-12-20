@@ -3,11 +3,13 @@ package sms
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sms-gateway/app"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
 	"sms-gateway/internal/operator"
 	"sms-gateway/pkg/metrics"
+	"sms-gateway/pkg/tracing"
 	"strings"
 )
 
@@ -20,6 +22,13 @@ const (
 )
 
 func sendSms(ctx context.Context, s model.SMS) error {
+	ctx = tracing.WithUser(ctx, fmt.Sprint(s.CustomerID))
+	ctx, span := tracing.Start(ctx, "sms.send",
+		tracing.Attr("customer_id", fmt.Sprint(s.CustomerID)),
+		tracing.Attr("type", string(s.Type)),
+	)
+	defer span.End()
+
 	if err := UpdateSMS(ctx, s, Init); err != nil {
 		app.Logger.Error("err in update sms ", "err", err)
 		return err
