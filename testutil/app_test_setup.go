@@ -70,8 +70,8 @@ func SetupAppTest(t *testing.T) (context.Context, func()) {
 	app.Echo = echo.New()
 
 	cleanup := func() {
-		app.DB.Close()
-		mysqlC.Terminate(ctx)
+		_ = app.DB.Close()
+		_ = mysqlC.Terminate(ctx)
 		cleanupChdir()
 	}
 
