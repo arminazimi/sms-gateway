@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"database/sql"
 
 	prom "github.com/prometheus/client_golang/prometheus"
 )
@@ -43,7 +42,6 @@ func DBExecObserver(query string, fn func(context.Context) error) func(context.C
 	}
 }
 
-// RowScanner is minimal interface to scan rows.
 type RowScanner interface {
 	Next() bool
 	Scan(dest ...any) error
@@ -51,7 +49,6 @@ type RowScanner interface {
 	Close() error
 }
 
-// DBQueryObserver wraps query flows that return rows; caller handles scanning.
 func DBQueryObserver(query string, fn func(context.Context) (RowScanner, error)) func(context.Context) (RowScanner, error) {
 	return func(ctx context.Context) (RowScanner, error) {
 		timer := prom.NewTimer(dbDuration.WithLabelValues(query))
@@ -65,8 +62,3 @@ func DBQueryObserver(query string, fn func(context.Context) (RowScanner, error))
 		return rows, err
 	}
 }
-
-// Null rows wrapper for sqlx usage convenience.
-type sqlRows struct{ *sql.Rows }
-
-func (s sqlRows) Close() error { return s.Rows.Close() }
