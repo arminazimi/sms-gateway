@@ -68,21 +68,27 @@ func MakeConsumerWithWorkers(
 			thisWorkerChan := make(chan amqp091.Delivery, 20)
 			go func(ctx context.Context, id int, c chan amqp091.Delivery) {
 				for {
-					dv, ok := <-c
-					if !ok {
-						fmt.Printf("Worker-%d is shutting down.\n", i)
+					select {
+					case <-ctx.Done():
+						fmt.Printf("Worker-%d is shutting down.\n", id)
 						return
+					case dv, ok := <-c:
+						if !ok {
+							fmt.Printf("Worker-%d channel closed.\n", id)
+							return
+						}
+
+						err := deliveryHandler(ctx, dv)
+
+						if err != nil {
+							slog.Error("cannot process delivery",
+								"queueName", queueName,
+								"err", err,
+							)
+							continue
+						}
 					}
 
-					err := deliveryHandler(ctx, dv)
-
-					if err != nil {
-						slog.Error("cannot process delivery",
-							"queueName", queueName,
-							"err", err,
-						)
-						continue
-					}
 				}
 
 			}(ctx, i, thisWorkerChan)
@@ -101,6 +107,12 @@ func MakeConsumerWithWorkers(
 					workerIndex = 0
 				}
 				select {
+				case <-ctx.Done():
+					fmt.Printf("shutting down consumer for %s\n", queueName)
+					for _, wc := range workerChans {
+						close(wc)
+					}
+					return
 				case <-amqpCloseNotifyC:
 					fmt.Printf("notified of a close event on %s.\n", queueName)
 					restartConsumer()
@@ -108,6 +120,7 @@ func MakeConsumerWithWorkers(
 					if !ok {
 						fmt.Printf("delivery channel is closed for %s.\n", queueName)
 						restartConsumer()
+						continue
 					}
 
 					go func(evt amqp091.Delivery) {
@@ -119,7 +132,8 @@ func MakeConsumerWithWorkers(
 			}
 		}()
 
-		return nil
+		<-ctx.Done()
+		return ctx.Err()
 
 	}
 

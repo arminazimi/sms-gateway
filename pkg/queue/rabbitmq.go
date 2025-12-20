@@ -101,3 +101,10 @@ func (rp *RabbitConnection) ConsumeContext(ctx context.Context, appName string, 
 
 	return delivery, nil
 }
+
+func (rp *RabbitConnection) Close() error {
+	if rp == nil || rp.Conn == nil {
+		return nil
+	}
+	return rp.Conn.Close()
+}

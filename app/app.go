@@ -69,3 +69,17 @@ func iniRabbit() {
 func initEcho() {
 	Echo = echo.New()
 }
+
+func Shutdown() {
+	if Rabbit != nil {
+		if err := Rabbit.Close(); err != nil {
+			Logger.Error("failed to close rabbit", "err", err)
+		}
+	}
+
+	if DB != nil {
+		if err := DB.Close(); err != nil {
+			Logger.Error("failed to close db", "err", err)
+		}
+	}
+}

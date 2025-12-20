@@ -73,13 +73,15 @@ func StartConsumers(ctx context.Context) error {
 		0,
 	)
 
-	if err := normalConsumer(ctx); err != nil {
-		return err
-	}
+	go func() {
+		_ = normalConsumer(ctx)
+	}()
 
-	if err := expressConsumer(ctx); err != nil {
-		return err
-	}
+	go func() {
+		_ = expressConsumer(ctx)
+	}()
+
+	<-ctx.Done()
 
 	return nil
 }

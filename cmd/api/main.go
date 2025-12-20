@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"os/signal"
 	"sms-gateway/app"
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/sms"
+	"syscall"
+	"time"
 
 	_ "sms-gateway/docs"
 
@@ -20,24 +23,49 @@ import (
 func main() {
 	app.Init()
 
-	// Consumers
-	if err := sms.StartConsumers(context.Background()); err != nil {
-		panic(err)
-	}
-
 	// Handlers
-	// sms
 	app.Echo.POST("/sms/send", sms.SendHandler)
 	app.Echo.GET("/sms/history", sms.HistoryHandler)
 
-	// balance
 	app.Echo.GET("/balance", balance.GetBalanceAndHistoryHandler)
 	app.Echo.POST("/balance/add", balance.AddBalanceHandler)
 
-	// swagger
 	app.Echo.GET("/swagger/*", echSwagger.WrapHandler)
 
-	if err := app.Echo.Start(config.AppListenAddr); err != nil {
-		panic(err)
+	// Graceful ShoutDown
+	serverErrCh := make(chan error, 1)
+	go func() {
+		serverErrCh <- app.Echo.Start(config.AppListenAddr)
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	consumerErrCh := make(chan error, 1)
+	go func() {
+		consumerErrCh <- sms.StartConsumers(ctx)
+	}()
+
+	select {
+	case err := <-consumerErrCh:
+		if err != nil {
+			app.Logger.Error("consumer error", "err", err)
+		}
+	case err := <-serverErrCh:
+		if err != nil {
+			app.Logger.Error("server error", "err", err)
+		}
+	case <-ctx.Done():
+		app.Logger.Info("shutdown signal received")
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.Echo.Shutdown(shutdownCtx); err != nil {
+		app.Logger.Error("echo shutdown", "err", err)
+	}
+
+	stop()
+	app.Shutdown()
 }
