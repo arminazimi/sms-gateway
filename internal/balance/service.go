@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sms-gateway/app"
 	"sms-gateway/internal/model"
+
+	"github.com/google/uuid"
 )
 
 type transactionType string
@@ -46,7 +48,7 @@ type DeductBalanceRequest struct {
 func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
 	price := calculatePrice(req.Type, req.Quantity)
 
-	tx, err := app.DB.DB.BeginTxx(ctx, nil)
+	tx, err := app.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -70,13 +72,15 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
 		return errors.New("insufficient balance")
 	}
 
-	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`
+	txID := uuid.NewString()
+	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
 	if _, err = tx.ExecContext(ctx,
 		insertTransactionQuery,
 		req.CustomerID,
 		-price,
 		Withdrawal,
-		descriptionGenerator(req.Type, req.Quantity)); err != nil {
+		descriptionGenerator(req.Type, req.Quantity),
+		txID); err != nil {
 		return err
 	}
 
@@ -92,10 +96,11 @@ type UserTransaction struct {
 	Amount          int64           `db:"amount"`
 	TransactionType transactionType `db:"transaction_type"`
 	Description     string          `db:"description"`
+	TransactionID   string          `db:"transaction_id" json:"transaction_id"`
 }
 
 func GetUserTransactions(ctx context.Context, userID string) ([]UserTransaction, error) {
-	const query = `SELECT user_id, amount, transaction_type, description FROM user_transactions WHERE user_id = ?`
+	const query = `SELECT user_id, amount, transaction_type, description, transaction_id FROM user_transactions WHERE user_id = ?`
 
 	var transactions []UserTransaction
 	if err := app.DB.SelectContext(ctx, &transactions, query, userID); err != nil {
@@ -174,8 +179,9 @@ func AddBalance(ctx context.Context, req AddBalanceRequest) (err error) {
 		description = fmt.Sprintf("افزایش موجودی به میزان %d", req.Amount)
 	}
 
-	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description) VALUES (?, ?, ?, ?)`
-	if _, err = tx.ExecContext(ctx, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description); err != nil {
+	txID := uuid.NewString()
+	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
+	if _, err = tx.ExecContext(ctx, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description, txID); err != nil {
 		return err
 	}
 

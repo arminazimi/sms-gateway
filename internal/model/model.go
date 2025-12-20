@@ -8,8 +8,9 @@ const (
 )
 
 type SMS struct {
-	CustomerID int64    `json:"customer_id"`
-	Text       string   `json:"text"`
-	Recipients []string `json:"recipients"`
-	Type       Type     `json:"type"`
+	CustomerID    int64    `json:"customer_id"`
+	Text          string   `json:"text"`
+	Recipients    []string `json:"recipients"`
+	Type          Type     `json:"type"`
+	TransactionID string   `json:"transaction_id"`
 }
