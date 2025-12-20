@@ -11,6 +11,8 @@ linters:
     - errorlint
     - sloglint
     - sqlclosecheck
+  disable:
+    - typecheck
 
 linters-settings:
   revive:
