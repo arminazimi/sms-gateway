@@ -77,8 +77,11 @@ graph LR
       -H 'Content-Type: application/json' \
       -d '{"user_id":1,"balance":100,"description":"top-up"}'
     ```
-- **GET /swagger/***: Swagger UI.
+- **GET /swagger/***: Swagger UI (served by the API)
 - **GET /metrics**: Prometheus metrics.
+
+- **Swagger UI**  (adjust port to your `LISTEN_ADDR`): `http://localhost:8080/swagger/index.html`
+- **Postman collection:** `postman/collections/Arvan.postman_collection.json`
 
 
 ## Data model (SQL)
@@ -154,20 +157,15 @@ sequenceDiagram
 - Implemented in `pkg/circuitbreaker` and used by `internal/operator.Send`.
 - Attempts OperatorA first; on failure or open breaker, routes to OperatorB.
 
-## Configuration (12-factor)
-Environment-driven via `config/` + `.env` (optional). Key vars:
-- `APP_NAME`, `LISTEN_ADDR`
-- `DB_HOST`, `DB_PORT`, `DB_USER_NAME`, `DB_PASSWORD`, `DB_NAME`
-- `RABBIT_URI`, `RABBIT_SMS_EXCHANGE`, `EXPRESS_QUEUE`, `NORMAL_QUEUE`
-- `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`
 
 ## Running locally
-```bash
-make dep     # go mod tidy (if defined)
-make lint    # golangci-lint (requires config)
-make test    # go test ./...
-make run     # starts API (depends on MySQL/Rabbit up)
-```
+- Build: `make build`
+- Run API: `make run`
+- Tests: `make test`
+- Lint: `make lint`
+- Swagger docs: `make swag`
+- Docker (app + deps): `make docker`
+
 Or manually:
 ```bash
 go run ./cmd/api
@@ -209,18 +207,3 @@ flowchart LR
   API --> Traces[Tracing OTEL]
   Worker --> Traces
 ```
-
-## Troubleshooting
-- **DB errors**: ensure MySQL reachable; check `DB_*` envs; migrations run at startup from `db/db.sql`.
-- **Rabbit errors**: validate `RABBIT_URI`, exchange/queue envs; management UI available on `:15672` in compose.
-- **Tracing export TLS**: set correct OTLP endpoint and protocol; disable TLS only if endpoint expects plaintext.
-- **Insufficient balance**: add funds via `POST /balance/add` before sending SMS.
-
-## Security & SQL safety
-- Parameterized queries used throughout; avoid string concatenation for user inputs.
-- Secrets/config come from environment variables.
-
-## Extending
-- Add operators by implementing `operator.Service` and wiring into failover order.
-- Add new metrics via `pkg/metrics` helpers.
-- Add new routes in `cmd/api/main.go` and document with swag comments.
