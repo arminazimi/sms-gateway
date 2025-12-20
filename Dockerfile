@@ -2,6 +2,8 @@
 
 # --- Build stage ---
 FROM golang:1.25.5-bookworm AS builder
+ENV GOPROXY=https://goproxy.io,direct
+ENV GOSUMDB=sum.golang.org
 WORKDIR /src
 
 # Enable Go modules and download deps first for better caching
