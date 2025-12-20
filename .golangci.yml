@@ -11,8 +11,6 @@ linters:
     - errorlint
     - sloglint
     - sqlclosecheck
-  disable:
-    - typecheck
 
 linters-settings:
   revive:
@@ -38,7 +36,11 @@ issues:
       linters:
         - gofmt
         - revive
+    - linters:
+        - typecheck
+      text: "undefined:"
   max-same-issues: 0
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
