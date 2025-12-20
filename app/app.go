@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"sms-gateway/config"
@@ -51,6 +52,16 @@ func iniRabbit() {
 	var err error
 	Rabbit, err = amqp.NewRabbitConnection(config.RabbitmqUri)
 	if err != nil {
+		panic(err)
+	}
+	if err := amqp.SetupQueues(context.Background(), amqp.QueueSetup{
+		URI:      config.RabbitmqUri,
+		Exchange: config.SmsExchange,
+		Bindings: []amqp.QueueBinding{
+			{Queue: config.ExpressQueue, RoutingKey: config.ExpressQueue},
+			{Queue: config.NormalQueue, RoutingKey: config.NormalQueue},
+		},
+	}); err != nil {
 		panic(err)
 	}
 }

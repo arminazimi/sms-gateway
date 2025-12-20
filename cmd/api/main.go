@@ -9,7 +9,6 @@ import (
 
 	_ "sms-gateway/docs"
 
-	"github.com/rabbitmq/amqp091-go"
 	echSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -20,8 +19,6 @@ import (
 // @BasePath        /
 func main() {
 	app.Init()
-
-	CreateHermesAndIVRQueue()
 
 	// Consumers
 	if err := sms.StartConsumers(context.Background()); err != nil {
@@ -41,54 +38,6 @@ func main() {
 	app.Echo.GET("/swagger/*", echSwagger.WrapHandler)
 
 	if err := app.Echo.Start(config.AppListenAddr); err != nil {
-		panic(err)
-	}
-}
-
-func CreateHermesAndIVRQueue() {
-	conn, err := amqp091.DialConfig(config.RabbitmqUri, amqp091.Config{
-		Properties: amqp091.NewConnectionProperties(),
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		_ = ch.Close()
-		_ = conn.Close()
-	}()
-
-	if err = ch.ExchangeDeclare(config.SmsExchange, "direct", true, false, false, false, amqp091.Table{}); err != nil {
-		panic(err)
-	}
-
-	// EXPRESS
-	if _, err = ch.QueueDeclare(config.ExpressQueue, true, false, false, false, amqp091.Table{}); err != nil {
-		panic(err)
-	}
-
-	if err = ch.QueueBind(
-		config.ExpressQueue,
-		config.ExpressQueue,
-		config.SmsExchange, false, amqp091.Table{}); err != nil {
-		panic(err)
-	}
-
-	// Normal
-	if _, err = ch.QueueDeclare(config.NormalQueue, true, false, false, false, amqp091.Table{}); err != nil {
-		panic(err)
-	}
-
-	if err = ch.QueueBind(
-		config.NormalQueue,
-		config.NormalQueue,
-		config.SmsExchange, false, amqp091.Table{}); err != nil {
 		panic(err)
 	}
 }
