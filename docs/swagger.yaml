@@ -1,0 +1,176 @@
+basePath: /
+definitions:
+  balance.AddBalancePayload:
+    properties:
+      balance:
+        type: integer
+      description:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  model.SMS:
+    properties:
+      customer_id:
+        type: integer
+      recipients:
+        items:
+          type: string
+        type: array
+      sms_identifier:
+        type: string
+      text:
+        type: string
+      transaction_id:
+        type: string
+      type:
+        $ref: '#/definitions/model.Type'
+    type: object
+  model.Type:
+    enum:
+    - normal
+    - express
+    type: string
+    x-enum-varnames:
+    - NORMAL
+    - EXPRESS
+host: localhost:8080
+info:
+  contact: {}
+  description: Simple SMS gateway with balance management and operator failover.
+  title: SMS Gateway API
+  version: "1.0"
+paths:
+  /balance:
+    get:
+      description: Returns current balance and transaction history
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: user_id is required
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Get user balance and transactions
+      tags:
+      - balance
+  /balance/add:
+    post:
+      consumes:
+      - application/json
+      description: Increases user balance and records transaction
+      parameters:
+      - description: Add balance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/balance.AddBalancePayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: done
+          schema:
+            type: string
+        "400":
+          description: invalid input
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Add balance for user
+      tags:
+      - balance
+  /sms/history:
+    get:
+      consumes:
+      - application/json
+      description: Returns sent SMS history for a user
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Filter by status (init|done|failed)
+        in: query
+        name: status
+        type: string
+      - description: Filter by sms_identifier
+        in: query
+        name: sms_identifier
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: user_id is required
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Get SMS history for user
+      tags:
+      - sms
+  /sms/send:
+    post:
+      consumes:
+      - application/json
+      description: Deducts balance, enqueues SMS for processing, returns processing
+        ack
+      parameters:
+      - description: SMS request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.SMS'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ack with sms_identifier
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: invalid input
+          schema:
+            type: string
+        "402":
+          description: dont have Not Enough Balance
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Send SMS request
+      tags:
+      - sms
+swagger: "2.0"

@@ -1,0 +1,137 @@
+{
+  "info": {
+    "_postman_id": "f85e49ae-72ca-40f9-bccb-0761eb51abc5",
+    "name": "Arvan",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "add Balance",
+      "id": "98cf2d86-8e3e-45b2-a6dd-4c40ad8a321f",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"user_id\" : 1 ,\n    \"balance\" : 100,\n    \"description\": \"hi\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "localhost:8080/balance/add",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "balance",
+            "add"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "get Balance",
+      "id": "3714e93b-fa7f-43a0-9eaa-3e0207581328",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/balance?user_id=1",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "balance"
+          ],
+          "query": [
+            {
+              "key": "user_id",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "SMS History",
+      "id": "362c9234-346a-48a5-b4f9-2a6efb29b232",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/sms/history?user_id=1&status=init&sms_identifier=05f6ccea-a5c9-4867-8a1a-d9b8a018d556",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "sms",
+            "history"
+          ],
+          "query": [
+            {
+              "key": "user_id",
+              "value": "1"
+            },
+            {
+              "key": "status",
+              "value": "init",
+              "description": "init , done "
+            },
+            {
+              "key": "sms_identifier",
+              "value": "05f6ccea-a5c9-4867-8a1a-d9b8a018d556"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "SMS Send",
+      "id": "eb372ebf-4188-4875-80e3-27b3ac3c21c1",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"customer_id\": 1,\n    \"text\": \"hi\",\n    \"recipients\": [\n        \"09128582812\",\n        \"091285284834\"\n    ],\n    \n       \"type\": \"normal\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "localhost:8080/sms/send",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "sms",
+            "send"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
