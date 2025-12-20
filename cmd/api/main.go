@@ -7,15 +7,23 @@ import (
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/sms"
 
+	_ "sms-gateway/docs"
+
 	"github.com/rabbitmq/amqp091-go"
+	echSwagger "github.com/swaggo/echo-swagger"
 )
 
+// @title           SMS Gateway API
+// @version         1.0
+// @description     Simple SMS gateway with balance management and operator failover.
+// @host            localhost:8080
+// @BasePath        /
 func main() {
 	app.Init()
 
 	CreateHermesAndIVRQueue()
 
-	//	Consumers
+	// Consumers
 	if err := sms.StartConsumers(context.Background()); err != nil {
 		panic(err)
 	}
@@ -28,6 +36,9 @@ func main() {
 	// balance
 	app.Echo.GET("/balance", balance.GetBalanceAndHistoryHandler)
 	app.Echo.POST("/balance/add", balance.AddBalanceHandler)
+
+	// swagger
+	app.Echo.GET("/swagger/*", echSwagger.WrapHandler)
 
 	if err := app.Echo.Start(config.AppListenAddr); err != nil {
 		panic(err)

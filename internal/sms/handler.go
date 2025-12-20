@@ -9,9 +9,22 @@ import (
 	"sms-gateway/internal/model"
 	amqp "sms-gateway/pkg/queue"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
+// SendHandler godoc
+// @Summary      Send SMS request
+// @Description  Deducts balance, enqueues SMS for processing, returns processing ack
+// @Tags         sms
+// @Accept       json
+// @Produce      json
+// @Param        request body model.SMS true "SMS request"
+// @Success      200 {object} map[string]any "ack with sms_identifier"
+// @Failure      400 {string} string "invalid input"
+// @Failure      402 {string} string "dont have Not Enough Balance"
+// @Failure      500 {string} string "internal error"
+// @Router       /sms/send [post]
 func SendHandler(c echo.Context) error {
 	var s model.SMS
 	if err := json.NewDecoder(c.Request().Body).Decode(&s); err != nil {
@@ -50,6 +63,7 @@ func SendHandler(c echo.Context) error {
 	}
 
 	s.TransactionID = transactionID
+	s.SmsIdentifier = uuid.NewString()
 
 	b, err := json.Marshal(s)
 	if err != nil {
@@ -66,18 +80,37 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	return c.JSON(http.StatusOK, "your msg is processing")
+	return c.JSON(http.StatusOK, map[string]string{
+		"status":         "processing",
+		"sms_identifier": s.SmsIdentifier,
+	})
 }
 
+// HistoryHandler godoc
+// @Summary      Get SMS history for user
+// @Description  Returns sent SMS history for a user
+// @Tags         sms
+// @Accept       json
+// @Produce      json
+// @Param        user_id query string true "User ID"
+// @Param        status query string false "Filter by status (init|done|failed)"
+// @Param        sms_identifier query string false "Filter by sms_identifier"
+// @Success      200 {object} map[string]any
+// @Failure      400 {string} string "user_id is required"
+// @Failure      500 {string} string "internal error"
+// @Router       /sms/history [get]
 func HistoryHandler(c echo.Context) error {
 	userID := c.QueryParam("user_id")
 	if userID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user_id is required")
 	}
 
-	history, err := GetUserHistory(c.Request().Context(), userID)
+	status := c.QueryParam("status")
+	smsIdentifier := c.QueryParam("sms_identifier")
+
+	history, err := GetUserHistory(c.Request().Context(), userID, status, smsIdentifier)
 	if err != nil {
-		app.Logger.Error("get sms history", "user_id", userID, "err", err)
+		app.Logger.Error("get sms history", "user_id", userID, "status", status, "sms_identifier", smsIdentifier, "err", err)
 		return err
 	}
 

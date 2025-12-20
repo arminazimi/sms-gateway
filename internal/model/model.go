@@ -13,4 +13,5 @@ type SMS struct {
 	Recipients    []string `json:"recipients"`
 	Type          Type     `json:"type"`
 	TransactionID string   `json:"transaction_id"`
+	SmsIdentifier string   `json:"sms_identifier"`
 }

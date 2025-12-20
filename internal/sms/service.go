@@ -61,11 +61,11 @@ func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string
 	valueStrings := make([]string, 0, len(s.Recipients))
 	valueArgs := make([]any, 0, len(s.Recipients)*5)
 	for _, recipient := range s.Recipients {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
-		valueArgs = append(valueArgs, s.CustomerID, s.Type, state, recipient, providerName)
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+		valueArgs = append(valueArgs, s.CustomerID, s.Type, state, recipient, providerName, s.SmsIdentifier)
 	}
 	query := ` INSERT INTO sms_status 
-				(user_id,type, status, recipient, provider, created_at, updated_at) 
+				(user_id,type, status, recipient, provider, sms_identifier, created_at, updated_at) 
 				VALUES ` + strings.Join(valueStrings, ",")
 	if _, err := app.DB.ExecContext(ctx, query, valueArgs...); err != nil {
 		return err
@@ -75,20 +75,34 @@ func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string
 }
 
 type UserHistory struct {
-	UserID    int64      `db:"user_id" json:"user_id"`
-	Type      model.Type `db:"type" json:"type"`
-	Status    State      `db:"status" json:"status"`
-	Recipient string     `db:"recipient" json:"recipient"`
-	Provider  string     `db:"provider" json:"provider"`
-	CreatedAt string     `db:"created_at" json:"created_at"`
-	UpdatedAt string     `db:"updated_at" json:"updated_at"`
+	UserID        int64      `db:"user_id" json:"user_id"`
+	Type          model.Type `db:"type" json:"type"`
+	Status        State      `db:"status" json:"status"`
+	Recipient     string     `db:"recipient" json:"recipient"`
+	Provider      string     `db:"provider" json:"provider"`
+	SmsIdentifier string     `db:"sms_identifier" json:"sms_identifier"`
+	CreatedAt     string     `db:"created_at" json:"created_at"`
+	UpdatedAt     string     `db:"updated_at" json:"updated_at"`
 }
 
-func GetUserHistory(ctx context.Context, userID string) ([]UserHistory, error) {
-	const query = `SELECT user_id, type, status, recipient, provider, created_at, updated_at FROM sms_status WHERE user_id = ? ORDER BY created_at DESC`
+func GetUserHistory(ctx context.Context, userID string, status string, smsIdentifier string) ([]UserHistory, error) {
+	query := `SELECT user_id, type, status, recipient, provider, sms_identifier, created_at, updated_at FROM sms_status WHERE user_id = ?`
+	args := []any{userID}
+
+	if status != "" {
+		query += ` AND status = ?`
+		args = append(args, status)
+	}
+
+	if smsIdentifier != "" {
+		query += ` AND sms_identifier = ?`
+		args = append(args, smsIdentifier)
+	}
+
+	query += ` ORDER BY created_at DESC`
 
 	var history []UserHistory
-	if err := app.DB.SelectContext(ctx, &history, query, userID); err != nil {
+	if err := app.DB.SelectContext(ctx, &history, query, args...); err != nil {
 		return nil, err
 	}
 
