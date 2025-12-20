@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sms-gateway/app"
+	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
 	"sms-gateway/internal/operator"
 	"strings"
@@ -12,23 +13,37 @@ import (
 type State string
 
 const (
-	Init State = "init"
-	Done State = "done"
+	Init   State = "init"
+	Done   State = "done"
+	Failed State = "failed"
 )
 
 func sendSms(ctx context.Context, s model.SMS) error {
 	if err := UpdateSMS(ctx, s, Init); err != nil {
+		app.Logger.Error("err in update sms ", "err", err)
 		return err
 	}
 
 	provider, err := operator.Send(ctx, s)
 	if err != nil {
+		app.Logger.Error("err in sending msg to provider", "err", err)
+		if err := UpdateSMS(ctx, s, Failed); err != nil {
+			app.Logger.Error("err in update sms ", "err", err)
+			return err
+		}
+		if err := balance.Refund(ctx, s); err != nil {
+			app.Logger.Error("err in Refund ", "err", err)
+			return err
+		}
 		return err
 	}
 
 	if err := UpdateSMS(ctx, s, Done, provider); err != nil {
+		app.Logger.Error("err in update sms ", "err", err)
 		return err
 	}
+
+	app.Logger.Info("sms processed successfully", "user_id", s.CustomerID, "type", s.Type)
 
 	return nil
 }

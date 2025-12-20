@@ -2,6 +2,7 @@ package operatorA
 
 import (
 	"context"
+	"errors"
 	"sms-gateway/app"
 	"sms-gateway/internal/model"
 )

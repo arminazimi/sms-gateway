@@ -14,8 +14,9 @@ import (
 type transactionType string
 
 const (
-	Withdrawal transactionType = "withdrawal"
-	Deposit    transactionType = "deposit"
+	Withdrawal            transactionType = "withdrawal"
+	Deposit               transactionType = "deposit"
+	CorrectiveTransaction transactionType = "Corrective"
 )
 
 type UserHasEnoughBalanceRequest struct {
@@ -79,7 +80,7 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (string, error
 		req.CustomerID,
 		-price,
 		Withdrawal,
-		descriptionGenerator(req.Type, req.Quantity),
+		fmt.Sprintf("بابت خرید %d پیامک تایپ %s", req.Quantity, req.Type),
 		txID); err != nil {
 		return "", err
 	}
@@ -124,6 +125,64 @@ func GetUserBalance(ctx context.Context, userID string) (int64, error) {
 	return balance, nil
 }
 
+func Refund(ctx context.Context, s model.SMS) error {
+	if s.TransactionID == "" {
+		return errors.New("transaction_id is required for refund")
+	}
+
+	tx, err := app.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	const selectTxn = `SELECT amount FROM user_transactions WHERE transaction_id = ? AND user_id = ? LIMIT 1`
+	var amount int64
+	if err = tx.QueryRowxContext(ctx, selectTxn, s.TransactionID, s.CustomerID).Scan(&amount); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("transaction not found")
+		}
+		return err
+	}
+
+	refundAmount := -1 * amount
+	const updateBalance = `UPDATE user_balances SET balance = balance + ? WHERE user_id = ?`
+	res, execErr := tx.ExecContext(ctx, updateBalance, refundAmount, s.CustomerID)
+	if execErr != nil {
+		err = execErr
+		return err
+	}
+
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		err = rowsErr
+		return err
+	}
+	if rows == 0 {
+		const insertBalance = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
+		if _, err = tx.ExecContext(ctx, insertBalance, s.CustomerID, refundAmount); err != nil {
+			return err
+		}
+	}
+
+	refundTxID := uuid.NewString()
+	const insertTxn = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
+	desc := fmt.Sprintf("%s :  تراکنش اصلاحی برای  ", s.TransactionID)
+	if _, err = tx.ExecContext(ctx, insertTxn, s.CustomerID, refundAmount, CorrectiveTransaction, desc, refundTxID); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func calculatePrice(Type model.Type, Quantity int) int64 {
 	return int64(getPricePerType(Type) * Quantity)
 }
@@ -134,10 +193,6 @@ func getPricePerType(t model.Type) int {
 		return 3
 	}
 	return 1
-}
-
-func descriptionGenerator(t model.Type, q int) string {
-	return fmt.Sprintf("بابت خرید %d پیامک تایپ %s", q, t)
 }
 
 type AddBalanceRequest struct {
