@@ -7,6 +7,7 @@ import (
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
 	"sms-gateway/internal/operator"
+	"sms-gateway/pkg/metrics"
 	"strings"
 )
 
@@ -67,7 +68,12 @@ func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string
 	query := ` INSERT INTO sms_status 
 				(user_id,type, status, recipient, provider, sms_identifier, created_at, updated_at) 
 				VALUES ` + strings.Join(valueStrings, ",")
-	if _, err := app.DB.ExecContext(ctx, query, valueArgs...); err != nil {
+
+	execFn := metrics.DBExecObserver("insert_sms_status", func(c context.Context) error {
+		_, err := app.DB.ExecContext(c, query, valueArgs...)
+		return err
+	})
+	if err := execFn(ctx); err != nil {
 		return err
 	}
 
@@ -102,7 +108,10 @@ func GetUserHistory(ctx context.Context, userID string, status string, smsIdenti
 	query += ` ORDER BY created_at DESC`
 
 	var history []UserHistory
-	if err := app.DB.SelectContext(ctx, &history, query, args...); err != nil {
+	queryFn := metrics.DBExecObserver("select_sms_history", func(c context.Context) error {
+		return app.DB.SelectContext(c, &history, query, args...)
+	})
+	if err := queryFn(ctx); err != nil {
 		return nil, err
 	}
 

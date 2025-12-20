@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sms-gateway/app"
 	"sms-gateway/internal/model"
+	"sms-gateway/pkg/metrics"
 
 	"github.com/google/uuid"
 )
@@ -104,7 +105,10 @@ func GetUserTransactions(ctx context.Context, userID string) ([]UserTransaction,
 	const query = `SELECT user_id, amount, transaction_type, description, transaction_id FROM user_transactions WHERE user_id = ?`
 
 	var transactions []UserTransaction
-	if err := app.DB.SelectContext(ctx, &transactions, query, userID); err != nil {
+	queryFn := metrics.DBExecObserver("select_user_transactions", func(c context.Context) error {
+		return app.DB.SelectContext(c, &transactions, query, userID)
+	})
+	if err := queryFn(ctx); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +119,10 @@ func GetUserBalance(ctx context.Context, userID string) (int64, error) {
 
 	const query = `SELECT balance FROM user_balances WHERE user_id = ?`
 	var balance int64
-	if err := app.DB.QueryRowxContext(ctx, query, userID).Scan(&balance); err != nil {
+	queryFn := metrics.DBExecObserver("select_user_balance", func(c context.Context) error {
+		return app.DB.QueryRowxContext(c, query, userID).Scan(&balance)
+	})
+	if err := queryFn(ctx); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
 		}
@@ -125,7 +132,7 @@ func GetUserBalance(ctx context.Context, userID string) (int64, error) {
 	return balance, nil
 }
 
-func Refund(ctx context.Context, s model.SMS) error {
+func Refund(ctx context.Context, s model.SMS) (err error) {
 	if s.TransactionID == "" {
 		return errors.New("transaction_id is required for refund")
 	}
@@ -142,7 +149,10 @@ func Refund(ctx context.Context, s model.SMS) error {
 
 	const selectTxn = `SELECT amount FROM user_transactions WHERE transaction_id = ? AND user_id = ? LIMIT 1`
 	var amount int64
-	if err = tx.QueryRowxContext(ctx, selectTxn, s.TransactionID, s.CustomerID).Scan(&amount); err != nil {
+	queryFn := metrics.DBExecObserver("select_refund_txn", func(c context.Context) error {
+		return tx.QueryRowxContext(c, selectTxn, s.TransactionID, s.CustomerID).Scan(&amount)
+	})
+	if err = queryFn(ctx); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return errors.New("transaction not found")
 		}
@@ -151,28 +161,26 @@ func Refund(ctx context.Context, s model.SMS) error {
 
 	refundAmount := -1 * amount
 	const updateBalance = `UPDATE user_balances SET balance = balance + ? WHERE user_id = ?`
-	res, execErr := tx.ExecContext(ctx, updateBalance, refundAmount, s.CustomerID)
-	if execErr != nil {
-		err = execErr
+	execUpdate := metrics.DBExecObserver("update_balance_refund", func(c context.Context) error {
+		_, execErr := tx.ExecContext(c, updateBalance, refundAmount, s.CustomerID)
+		return execErr
+	})
+	if err = execUpdate(ctx); err != nil {
 		return err
 	}
 
-	rows, rowsErr := res.RowsAffected()
-	if rowsErr != nil {
-		err = rowsErr
-		return err
-	}
-	if rows == 0 {
-		const insertBalance = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
-		if _, err = tx.ExecContext(ctx, insertBalance, s.CustomerID, refundAmount); err != nil {
-			return err
-		}
-	}
+	rows, rowsErr := tx.ExecContext(ctx, "SELECT ROW_COUNT()")
+	_ = rows
+	_ = rowsErr
 
-	refundTxID := uuid.NewString()
 	const insertTxn = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
+	refundTxID := uuid.NewString()
 	desc := fmt.Sprintf("%s :  تراکنش اصلاحی برای  ", s.TransactionID)
-	if _, err = tx.ExecContext(ctx, insertTxn, s.CustomerID, refundAmount, CorrectiveTransaction, desc, refundTxID); err != nil {
+	execInsert := metrics.DBExecObserver("insert_refund_txn", func(c context.Context) error {
+		_, execErr := tx.ExecContext(c, insertTxn, s.CustomerID, refundAmount, CorrectiveTransaction, desc, refundTxID)
+		return execErr
+	})
+	if err = execInsert(ctx); err != nil {
 		return err
 	}
 
@@ -213,18 +221,29 @@ func AddBalance(ctx context.Context, req AddBalanceRequest) (err error) {
 	}()
 
 	const increaseBalanceQuery = `UPDATE user_balances SET balance = balance + ? WHERE user_id = ?`
-	res, err := tx.ExecContext(ctx, increaseBalanceQuery, req.Amount, req.CustomerID)
+	execUpdate := metrics.DBExecObserver("update_balance_add", func(c context.Context) error {
+		_, execErr := tx.ExecContext(c, increaseBalanceQuery, req.Amount, req.CustomerID)
+		return execErr
+	})
+	if err = execUpdate(ctx); err != nil {
+		return err
+	}
+
+	const insertBalanceQuery = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
+	execInsertBalance := metrics.DBExecObserver("insert_balance_if_missing", func(c context.Context) error {
+		_, execErr := tx.ExecContext(c, insertBalanceQuery, req.CustomerID, req.Amount)
+		return execErr
+	})
+
+	rows, err := tx.ExecContext(ctx, "SELECT ROW_COUNT()")
+	_ = rows
 	if err != nil {
 		return err
 	}
 
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		const insertBalanceQuery = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
-		if _, err = tx.ExecContext(ctx, insertBalanceQuery, req.CustomerID, req.Amount); err != nil {
+	// If no rows were updated, insert a balance row.
+	if affected, _ := rows.RowsAffected(); affected == 0 {
+		if err = execInsertBalance(ctx); err != nil {
 			return err
 		}
 	}
@@ -236,7 +255,11 @@ func AddBalance(ctx context.Context, req AddBalanceRequest) (err error) {
 
 	txID := uuid.NewString()
 	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
-	if _, err = tx.ExecContext(ctx, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description, txID); err != nil {
+	execInsertTxn := metrics.DBExecObserver("insert_deposit_txn", func(c context.Context) error {
+		_, execErr := tx.ExecContext(c, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description, txID)
+		return execErr
+	})
+	if err = execInsertTxn(ctx); err != nil {
 		return err
 	}
 

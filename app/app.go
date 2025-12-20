@@ -6,6 +6,7 @@ import (
 	"os"
 	"sms-gateway/config"
 	"sms-gateway/pkg/db"
+	"sms-gateway/pkg/metrics"
 	amqp "sms-gateway/pkg/queue"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -68,6 +69,7 @@ func iniRabbit() {
 
 func initEcho() {
 	Echo = echo.New()
+	Echo.Use(metrics.EchoMiddleware())
 }
 
 func Shutdown() {

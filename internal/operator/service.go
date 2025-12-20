@@ -10,6 +10,7 @@ import (
 	operatorA "sms-gateway/internal/operator/operatorA"
 	operatorB "sms-gateway/internal/operator/operatorB"
 	"sms-gateway/pkg/circuitbreaker"
+	"sms-gateway/pkg/metrics"
 )
 
 type Operator interface {
@@ -48,12 +49,16 @@ func dispatch(ctx context.Context, name string, op Operator, breaker *circuitbre
 		}
 	}
 
+	wrap := func(call func(context.Context) error) func(context.Context) error {
+		return metrics.OperatorObserver(name, call)
+	}
+
 	var lastErr error
 	backoff := retryBackoff
 
 	for attempt := 0; attempt <= maxSendRetries; attempt++ {
 		sendCtx, cancel := context.WithTimeout(ctx, operatorTimeout)
-		err := op.Send(sendCtx, s)
+		err := wrap(func(c context.Context) error { return op.Send(c, s) })(sendCtx)
 		cancel()
 
 		if err == nil {

@@ -7,6 +7,7 @@ import (
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/sms"
+	"sms-gateway/pkg/metrics"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ func main() {
 	app.Echo.POST("/balance/add", balance.AddBalanceHandler)
 
 	app.Echo.GET("/swagger/*", echSwagger.WrapHandler)
+	app.Echo.GET("/metrics", metrics.Handler())
 
 	// Graceful ShoutDown
 	serverErrCh := make(chan error, 1)
