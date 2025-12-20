@@ -12,6 +12,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 var (
@@ -96,6 +97,7 @@ func initEcho() {
 		}
 	})
 	Echo.Use(metrics.EchoMiddleware())
+	Echo.Use(middleware.Recover())
 }
 
 func Shutdown() {
