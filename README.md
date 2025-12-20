@@ -1,6 +1,10 @@
 # SMS Gateway – Developer Guide
 
 ## Overview
+- Full-stack observability: metrics for HTTP/DB/RabbitMQ, structured JSON logs, OpenTelemetry tracing.
+- Robustness: graceful shutdown for server and consumers, panic recovery middleware, balance refund on provider failure.
+- Message flow: RabbitMQ for enqueue/consume, MySQL for balance/transactions/history, operator failover with circuit breaker.
+
 A small SMS gateway service that exposes HTTP APIs, manages user balance, enqueues SMS to RabbitMQ, processes delivery via operators with circuit breaker failover, and persists traces/metrics. Built with Go, Echo, MySQL, RabbitMQ, OpenTelemetry, and Prometheus-compatible metrics.
 
 ## Architecture
