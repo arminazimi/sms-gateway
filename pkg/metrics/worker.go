@@ -41,3 +41,7 @@ func WorkerObserver(queue string, handler func(context.Context) error) func(cont
 		return err
 	}
 }
+
+func WorkerProcessed(queue, result string) {
+	workerProcessed.WithLabelValues(queue, result).Inc()
+}

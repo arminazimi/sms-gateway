@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"sms-gateway/pkg/metrics"
+
 	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -47,10 +49,14 @@ func (rp *RabbitConnection) PublishContext(ctx context.Context, req PublishReque
 		}
 	}()
 
-	if err = ch.PublishWithContext(ctx, req.Exchange, req.Key, false, false, amqp091.Publishing{
-		Timestamp: time.Now(),
-		Body:      req.Msg,
-	}); err != nil {
+	publishFn := metrics.OperatorObserver("rabbit_publish", func(c context.Context) error {
+		return ch.PublishWithContext(c, req.Exchange, req.Key, false, false, amqp091.Publishing{
+			Timestamp: time.Now(),
+			Body:      req.Msg,
+		})
+	})
+
+	if err = publishFn(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -99,7 +105,16 @@ func (rp *RabbitConnection) ConsumeContext(ctx context.Context, appName string, 
 		return nil, err
 	}
 
-	return delivery, nil
+	wrapped := make(chan amqp091.Delivery)
+	go func() {
+		defer close(wrapped)
+		for d := range delivery {
+			metrics.WorkerProcessed(queueName, "received")
+			wrapped <- d
+		}
+	}()
+
+	return wrapped, nil
 }
 
 func (rp *RabbitConnection) Close() error {
