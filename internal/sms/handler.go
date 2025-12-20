@@ -39,14 +39,17 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusPaymentRequired, "dont have Not Enough Balance ")
 	}
 
-	if err := balance.DeductBalance(c.Request().Context(), balance.DeductBalanceRequest{
+	transactionID, err := balance.DeductBalance(c.Request().Context(), balance.DeductBalanceRequest{
 		CustomerID: s.CustomerID,
 		Quantity:   len(s.Recipients),
 		Type:       s.Type,
-	}); err != nil {
+	})
+	if err != nil {
 		app.Logger.Error("DeductBalance ", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
+
+	s.TransactionID = transactionID
 
 	b, err := json.Marshal(s)
 	if err != nil {

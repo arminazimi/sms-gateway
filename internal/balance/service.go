@@ -45,12 +45,12 @@ type DeductBalanceRequest struct {
 	Type       model.Type
 }
 
-func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
+func DeductBalance(ctx context.Context, req DeductBalanceRequest) (string, error) {
 	price := calculatePrice(req.Type, req.Quantity)
 
 	tx, err := app.DB.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		if err != nil {
@@ -61,15 +61,15 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
 	const updateBalanceQuery = `UPDATE user_balances SET balance = balance - ? WHERE user_id = ? AND balance >= ?`
 	res, err := tx.ExecContext(ctx, updateBalanceQuery, price, req.CustomerID, price)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if rows == 0 {
-		return errors.New("insufficient balance")
+		return "", errors.New("insufficient balance")
 	}
 
 	txID := uuid.NewString()
@@ -81,14 +81,14 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (err error) {
 		Withdrawal,
 		descriptionGenerator(req.Type, req.Quantity),
 		txID); err != nil {
-		return err
+		return "", err
 	}
 
 	if err = tx.Commit(); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return txID, nil
 }
 
 type UserTransaction struct {
