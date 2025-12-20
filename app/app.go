@@ -42,7 +42,9 @@ func initDB() {
 	if err != nil {
 		panic(err)
 	}
-	//TODO: migrate
+	if err := db.MigrateFromFile(DB, "db/db.sql"); err != nil {
+		panic(err)
+	}
 }
 
 func iniRabbit() {
