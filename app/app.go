@@ -23,6 +23,7 @@ var (
 )
 
 func Init() {
+	config.Init()
 	initLogger()
 	initTracing()
 	initDB()

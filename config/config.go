@@ -20,7 +20,7 @@ var (
 	NormalQueue   string
 )
 
-func init() {
+func Init() {
 	AppName = env.Default("APP_NAME", "sms-gateway")
 	AppListenAddr = env.RequiredNotEmpty("LISTEN_ADDR")
 	DBUsername = env.RequiredNotEmpty("DB_USER_NAME")
