@@ -65,14 +65,22 @@ graph LR
 - **POST /sms/send**: Enqueue SMS after balance check and debit.
   - Example:
     ```bash
-    curl -X POST http://localhost:8080/sms/send \
-      -H 'Content-Type: application/json' \
-      -d '{"customer_id":1,"type":"normal","recipients":["+12025550123"],"content":"hi"}'
+    curl --location 'http://localhost:8080/sms/send' \
+      --header 'Content-Type: application/json' \
+      --data '{
+        "customer_id": 1,
+        "text": "hi",
+        "recipients": [
+          "09128582812",
+          "091285284834"
+        ],
+        "type": "normal"
+      }'
     ```
 - **GET /sms/history**: SMS status history with optional filters.
   - Example:
     ```bash
-    curl "http://localhost:8080/sms/history?user_id=1&status=done"
+    curl --location 'localhost:8080/sms/history?user_id=1&status=init&sms_identifier=88636fb2-dd01-42a4-a718-1fe200683a45'
     ```
 - **GET /balance**: Current balance + transactions.
   - Example:
