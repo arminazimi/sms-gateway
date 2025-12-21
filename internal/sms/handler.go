@@ -2,6 +2,7 @@ package sms
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sms-gateway/app"
@@ -42,28 +43,17 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "zero recipients")
 	}
 
-	// check user balance
-	hasBalance, err := balance.UserHasBalance(c.Request().Context(), balance.UserHasEnoughBalanceRequest{
+	transactionID, err := balance.Charge(c.Request().Context(), balance.ChargeRequest{
 		CustomerID: s.CustomerID,
 		Quantity:   len(s.Recipients),
 		Type:       s.Type,
 	})
 	if err != nil {
-		app.Logger.Error("UserHasBalance ", "err", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
-	}
-	if !hasBalance {
-		app.Logger.Error("User Has Not Enough Balance ", "user id ", s.CustomerID)
-		return echo.NewHTTPError(http.StatusPaymentRequired, "dont have Not Enough Balance ")
-	}
-
-	transactionID, err := balance.DeductBalance(c.Request().Context(), balance.DeductBalanceRequest{
-		CustomerID: s.CustomerID,
-		Quantity:   len(s.Recipients),
-		Type:       s.Type,
-	})
-	if err != nil {
-		app.Logger.Error("DeductBalance ", "err", err)
+		if errors.Is(err, balance.ErrInsufficientBalance) {
+			app.Logger.Error("User Has Not Enough Balance ", "user id ", s.CustomerID)
+			return echo.NewHTTPError(http.StatusPaymentRequired, "dont have Not Enough Balance ")
+		}
+		app.Logger.Error("ChargeBalance ", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 

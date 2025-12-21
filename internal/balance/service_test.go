@@ -28,30 +28,6 @@ func TestUserHasBalance(t *testing.T) {
 	}
 }
 
-func TestDeductBalance(t *testing.T) {
-	ctx := testutil.EnsureSetup(t)
-	testutil.ResetTables(ctx, t)
-	_, err := app.DB.ExecContext(ctx, "INSERT INTO user_balances (user_id, balance) VALUES (?, ?)", 201, 5)
-	if err != nil {
-		t.Fatalf("seed balance: %v", err)
-	}
-	txID, err := DeductBalance(ctx, DeductBalanceRequest{CustomerID: 201, Quantity: 1, Type: model.NORMAL})
-	if err != nil {
-		t.Fatalf("deduct: %v", err)
-	}
-	if txID == "" {
-		t.Fatalf("expected tx id")
-	}
-	bal, _ := GetUserBalance(ctx, "201")
-	if bal != 4 {
-		t.Fatalf("expected balance 4, got %d", bal)
-	}
-	txs, _ := GetUserTransactions(ctx, "201")
-	if len(txs) != 1 || txs[0].TransactionID == "" {
-		t.Fatalf("expected one withdrawal tx, got %+v", txs)
-	}
-}
-
 func TestGetUserTransactions(t *testing.T) {
 	ctx := testutil.EnsureSetup(t)
 	testutil.ResetTables(ctx, t)

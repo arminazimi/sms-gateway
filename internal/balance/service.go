@@ -20,6 +20,8 @@ const (
 	CorrectiveTransaction transactionType = "Corrective"
 )
 
+var ErrInsufficientBalance = errors.New("insufficient balance")
+
 type UserHasEnoughBalanceRequest struct {
 	CustomerID int64
 	Quantity   int
@@ -41,13 +43,13 @@ func UserHasBalance(ctx context.Context, req UserHasEnoughBalanceRequest) (bool,
 	return balance >= price, nil
 }
 
-type DeductBalanceRequest struct {
+type ChargeRequest struct {
 	CustomerID int64
 	Quantity   int
 	Type       model.Type
 }
 
-func DeductBalance(ctx context.Context, req DeductBalanceRequest) (string, error) {
+func Charge(ctx context.Context, req ChargeRequest) (string, error) {
 	price := calculatePrice(req.Type, req.Quantity)
 
 	tx, err := app.DB.BeginTxx(ctx, nil)
@@ -71,7 +73,7 @@ func DeductBalance(ctx context.Context, req DeductBalanceRequest) (string, error
 		return "", err
 	}
 	if rows == 0 {
-		return "", errors.New("insufficient balance")
+		return "", ErrInsufficientBalance
 	}
 
 	txID := uuid.NewString()
@@ -136,6 +138,9 @@ func Refund(ctx context.Context, s model.SMS) (err error) {
 	if s.TransactionID == "" {
 		return errors.New("transaction_id is required for refund")
 	}
+	if s.CustomerID == 0 {
+		return errors.New("customer_id is required for refund")
+	}
 
 	tx, err := app.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -168,10 +173,6 @@ func Refund(ctx context.Context, s model.SMS) (err error) {
 	if err = execUpdate(ctx); err != nil {
 		return err
 	}
-
-	rows, rowsErr := tx.ExecContext(ctx, "SELECT ROW_COUNT()")
-	_ = rows
-	_ = rowsErr
 
 	const insertTxn = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
 	refundTxID := uuid.NewString()
