@@ -9,6 +9,7 @@ import (
 	"sms-gateway/pkg/metrics"
 	amqp "sms-gateway/pkg/queue"
 	"sms-gateway/pkg/tracing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
@@ -58,6 +59,12 @@ func initDB() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Capacity knobs (important for high throughput)
+	DB.SetMaxOpenConns(config.DBMaxOpenConns)
+	DB.SetMaxIdleConns(config.DBMaxIdleConns)
+	DB.SetConnMaxLifetime(time.Duration(config.DBConnMaxLifetimeSec) * time.Second)
+
 	if err := db.MigrateFromFile(DB, "db/db.sql"); err != nil {
 		panic(err)
 	}

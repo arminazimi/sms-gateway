@@ -8,8 +8,11 @@ import (
 	"sms-gateway/app"
 	"sms-gateway/internal/model"
 	"sms-gateway/pkg/metrics"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 type transactionType string
@@ -49,18 +52,13 @@ type ChargeRequest struct {
 	Type       model.Type
 }
 
-func Charge(ctx context.Context, req ChargeRequest) (string, error) {
-	price := calculatePrice(req.Type, req.Quantity)
-
-	tx, err := app.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return "", err
+// ChargeTx atomically checks and deducts user balance and records a withdrawal transaction
+// using the provided DB transaction.
+func ChargeTx(ctx context.Context, tx *sqlx.Tx, req ChargeRequest) (string, error) {
+	if tx == nil {
+		return "", errors.New("tx is required")
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+	price := calculatePrice(req.Type, req.Quantity)
 
 	const updateBalanceQuery = `UPDATE user_balances SET balance = balance - ? WHERE user_id = ? AND balance >= ?`
 	res, err := tx.ExecContext(ctx, updateBalanceQuery, price, req.CustomerID, price)
@@ -88,10 +86,29 @@ func Charge(ctx context.Context, req ChargeRequest) (string, error) {
 		return "", err
 	}
 
-	if err = tx.Commit(); err != nil {
+	return txID, nil
+}
+
+// Charge runs ChargeTx in its own DB transaction.
+func Charge(ctx context.Context, req ChargeRequest) (string, error) {
+	tx, err := app.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	txID, err := ChargeTx(ctx, tx, req)
+	if err != nil {
 		return "", err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
 	return txID, nil
 }
 
@@ -211,62 +228,72 @@ type AddBalanceRequest struct {
 }
 
 func AddBalance(ctx context.Context, req AddBalanceRequest) (err error) {
-	tx, err := app.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
+	// Retry deadlocks/lock timeouts (common during load test seeding).
+	var lastErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(30*(1<<attempt)) * time.Millisecond)
+		}
+
+		tx, txErr := app.DB.BeginTxx(ctx, nil)
+		if txErr != nil {
+			return txErr
+		}
+
+		// Single statement upsert avoids UPDATE+INSERT deadlocks.
+		const upsertBalance = `
+			INSERT INTO user_balances (user_id, balance)
+			VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE
+				balance = balance + VALUES(balance),
+				last_updated = CURRENT_TIMESTAMP
+		`
+		if lastErr = metrics.DBExecObserver("upsert_balance_add", func(c context.Context) error {
+			_, execErr := tx.ExecContext(c, upsertBalance, req.CustomerID, req.Amount)
+			return execErr
+		})(ctx); lastErr != nil {
 			_ = tx.Rollback()
+			if isRetryableMySQLError(lastErr) {
+				continue
+			}
+			return lastErr
 		}
-	}()
 
-	const increaseBalanceQuery = `UPDATE user_balances SET balance = balance + ? WHERE user_id = ?`
-	execUpdate := metrics.DBExecObserver("update_balance_add", func(c context.Context) error {
-		_, execErr := tx.ExecContext(c, increaseBalanceQuery, req.Amount, req.CustomerID)
-		return execErr
-	})
-	if err = execUpdate(ctx); err != nil {
-		return err
-	}
-
-	const insertBalanceQuery = `INSERT INTO user_balances (user_id, balance) VALUES (?, ?)`
-	execInsertBalance := metrics.DBExecObserver("insert_balance_if_missing", func(c context.Context) error {
-		_, execErr := tx.ExecContext(c, insertBalanceQuery, req.CustomerID, req.Amount)
-		return execErr
-	})
-
-	rows, err := tx.ExecContext(ctx, "SELECT ROW_COUNT()")
-	_ = rows
-	if err != nil {
-		return err
-	}
-
-	// If no rows were updated, insert a balance row.
-	if affected, _ := rows.RowsAffected(); affected == 0 {
-		if err = execInsertBalance(ctx); err != nil {
-			return err
+		description := req.Description
+		if description == "" {
+			description = fmt.Sprintf("افزایش موجودی به میزان %d", req.Amount)
 		}
-	}
 
-	description := req.Description
-	if description == "" {
-		description = fmt.Sprintf("افزایش موجودی به میزان %d", req.Amount)
-	}
+		txID := uuid.NewString()
+		const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
+		if lastErr = metrics.DBExecObserver("insert_deposit_txn", func(c context.Context) error {
+			_, execErr := tx.ExecContext(c, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description, txID)
+			return execErr
+		})(ctx); lastErr != nil {
+			_ = tx.Rollback()
+			if isRetryableMySQLError(lastErr) {
+				continue
+			}
+			return lastErr
+		}
 
-	txID := uuid.NewString()
-	const insertTransactionQuery = `INSERT INTO user_transactions (user_id, amount, transaction_type, description, transaction_id) VALUES (?, ?, ?, ?, ?)`
-	execInsertTxn := metrics.DBExecObserver("insert_deposit_txn", func(c context.Context) error {
-		_, execErr := tx.ExecContext(c, insertTransactionQuery, req.CustomerID, req.Amount, Deposit, description, txID)
-		return execErr
-	})
-	if err = execInsertTxn(ctx); err != nil {
-		return err
+		if lastErr = tx.Commit(); lastErr != nil {
+			_ = tx.Rollback()
+			if isRetryableMySQLError(lastErr) {
+				continue
+			}
+			return lastErr
+		}
+		return nil
 	}
+	return lastErr
+}
 
-	if err = tx.Commit(); err != nil {
-		return err
+func isRetryableMySQLError(err error) bool {
+	var myErr *mysql.MySQLError
+	if errors.As(err, &myErr) {
+		// 1213: deadlock; 1205: lock wait timeout
+		return myErr.Number == 1213 || myErr.Number == 1205
 	}
-
-	return nil
+	return false
 }

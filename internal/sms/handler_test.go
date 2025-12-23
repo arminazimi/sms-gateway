@@ -180,10 +180,9 @@ func TestSendHandler_PublishError(t *testing.T) {
 	_, _ = app.DB.ExecContext(context.Background(), "DELETE FROM user_balances")
 	_, _ = app.DB.ExecContext(context.Background(), "INSERT INTO user_balances (user_id, balance) VALUES (?, ?)", 1, 1000)
 
-	// force publish failure by closing rabbit connection
-	if app.Rabbit != nil && app.Rabbit.Conn != nil {
-		_ = app.Rabbit.Conn.Close()
-	}
+	// Handler no longer publishes to Rabbit directly (outbox pattern).
+	// Force failure by breaking outbox insert.
+	_, _ = app.DB.ExecContext(context.Background(), "DROP TABLE outbox_events")
 
 	e := echo.New()
 	body := `{"customer_id":1,"recipients":["+1"],"type":"normal"}`
@@ -247,13 +246,13 @@ func TestHistoryHandler_Success(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	_, _ = app.DB.ExecContext(context.Background(), "DELETE FROM sms_status")
-	_, err := app.DB.ExecContext(context.Background(), `INSERT INTO sms_status (user_id,type,status,recipient,provider,sms_identifier,created_at,updated_at) VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`, 5, model.NORMAL, Init, "+1", "operatorA", "sid-1")
+	_, err := app.DB.ExecContext(context.Background(), `INSERT INTO sms_status (user_id,type,status,recipient,provider,sms_identifier,created_at,updated_at) VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`, 5, model.NORMAL, Pending, "+1", "operatorA", "sid-1")
 	if err != nil {
 		t.Fatalf("seed history: %v", err)
 	}
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/sms/history?user_id=5&status=init&sms_identifier=sid-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sms/history?user_id=5&status=pending&sms_identifier=sid-1", nil)
 	rec := httptest.NewRecorder()
 	ctx := e.NewContext(req, rec)
 

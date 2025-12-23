@@ -21,7 +21,10 @@ type DB struct {
 }
 
 func ConnectionString(dbConfig Config) string {
-	url := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+	// parseTime=true is required so DATETIME/TIMESTAMP scan into time.Time instead of []uint8.
+	// loc=Local keeps times consistent with the host/container locale.
+	// charset/collation are set for safe UTF-8 text handling.
+	url := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=Local&charset=utf8mb4&collation=utf8mb4_unicode_ci",
 		dbConfig.Username,
 		dbConfig.Password,
 		dbConfig.Host,

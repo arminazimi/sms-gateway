@@ -9,7 +9,7 @@ import (
 	"sms-gateway/config"
 	"sms-gateway/internal/balance"
 	"sms-gateway/internal/model"
-	amqp "sms-gateway/pkg/queue"
+	"sms-gateway/internal/outbox"
 	"sms-gateway/pkg/tracing"
 
 	"github.com/google/uuid"
@@ -43,7 +43,18 @@ func SendHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "zero recipients")
 	}
 
-	transactionID, err := balance.Charge(c.Request().Context(), balance.ChargeRequest{
+	s.SmsIdentifier = uuid.NewString()
+	// Atomic: deduct balance (user_transactions) + insert outbox (pending) in ONE DB transaction.
+	tx, err := app.DB.BeginTxx(c.Request().Context(), nil)
+	if err != nil {
+		app.Logger.Error("begin tx", "err", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	transactionID, err := balance.ChargeTx(c.Request().Context(), tx, balance.ChargeRequest{
 		CustomerID: s.CustomerID,
 		Quantity:   len(s.Recipients),
 		Type:       s.Type,
@@ -53,25 +64,42 @@ func SendHandler(c echo.Context) error {
 			app.Logger.Error("User Has Not Enough Balance ", "user id ", s.CustomerID)
 			return echo.NewHTTPError(http.StatusPaymentRequired, "dont have Not Enough Balance ")
 		}
-		app.Logger.Error("ChargeBalance ", "err", err)
+		app.Logger.Error("ChargeTx ", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-
 	s.TransactionID = transactionID
-	s.SmsIdentifier = uuid.NewString()
 
-	b, err := json.Marshal(s)
-	if err != nil {
-		app.Logger.Error(" err in marshal", "user id ", s.CustomerID)
+	priority := 0
+	if s.Type == model.EXPRESS {
+		priority = 10
+	}
+
+	// Initial state: PENDING (inserted with the outbox record)
+	if err := InsertPendingTx(c.Request().Context(), tx, s); err != nil {
+		app.Logger.Error("insert sms pending", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	if err = app.Rabbit.PublishContext(c.Request().Context(), amqp.PublishRequest{
-		Exchange: config.SmsExchange,
-		Key:      getQueue(s.Type),
-		Msg:      b,
+	// Store SMS message in outbox for the job to publish to Rabbit.
+	if err := outbox.InsertTx(c.Request().Context(), tx, outbox.Event{
+		AggregateType: "sms",
+		AggregateID:   s.SmsIdentifier,
+		EventType:     "sms.send",
+		Priority:      priority,
+		Status:        outbox.StatusPending,
+		Payload: map[string]any{
+			"exchange":       config.SmsExchange,
+			"routing_key":    getQueue(s.Type),
+			"sms":            s,
+			"transaction_id": s.TransactionID,
+		},
 	}); err != nil {
-		app.Logger.Error(" err in publish", "user id ", s.CustomerID)
+		app.Logger.Error("insert outbox", "err", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
+	if err := tx.Commit(); err != nil {
+		app.Logger.Error("commit tx", "err", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
@@ -88,7 +116,7 @@ func SendHandler(c echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Param        user_id query string true "User ID"
-// @Param        status query string false "Filter by status (init|done|failed)"
+// @Param        status query string false "Filter by status (pending|sending|done|failed)"
 // @Param        sms_identifier query string false "Filter by sms_identifier"
 // @Success      200 {object} map[string]any
 // @Failure      400 {string} string "user_id is required"

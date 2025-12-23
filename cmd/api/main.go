@@ -48,10 +48,19 @@ func main() {
 		consumerErrCh <- sms.StartConsumers(ctx)
 	}()
 
+	outboxErrCh := make(chan error, 1)
+	go func() {
+		outboxErrCh <- sms.StartOutboxPublisher(ctx)
+	}()
+
 	select {
 	case err := <-consumerErrCh:
 		if err != nil {
 			app.Logger.Error("consumer error", "err", err)
+		}
+	case err := <-outboxErrCh:
+		if err != nil {
+			app.Logger.Error("outbox error", "err", err)
 		}
 	case err := <-serverErrCh:
 		if err != nil {

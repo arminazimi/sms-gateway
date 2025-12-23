@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/joho/godotenv"
@@ -36,6 +37,18 @@ func Default(key, def string) string {
 		return def
 	}
 	return value
+}
+
+func DefaultInt(key string, def int) int {
+	v := getEnv(key)
+	if v == "" {
+		return def
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return i
 }
 
 func RequiredNotEmpty(key string) string {

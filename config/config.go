@@ -18,6 +18,11 @@ var (
 	SmsExchange   string
 	ExpressQueue  string
 	NormalQueue   string
+
+	// Capacity knobs
+	DBMaxOpenConns       int
+	DBMaxIdleConns       int
+	DBConnMaxLifetimeSec int
 )
 
 func Init() {
@@ -36,4 +41,8 @@ func Init() {
 	SmsExchange = env.RequiredNotEmpty("RABBIT_SMS_EXCHANGE")
 	ExpressQueue = env.RequiredNotEmpty("EXPRESS_QUEUE")
 	NormalQueue = env.RequiredNotEmpty("NORMAL_QUEUE")
+
+	DBMaxOpenConns = env.DefaultInt("DB_MAX_OPEN_CONNS", 50)
+	DBMaxIdleConns = env.DefaultInt("DB_MAX_IDLE_CONNS", 25)
+	DBConnMaxLifetimeSec = env.DefaultInt("DB_CONN_MAX_LIFETIME_SEC", 300)
 }

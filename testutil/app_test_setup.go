@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"sms-gateway/app"
@@ -11,6 +12,7 @@ import (
 	"sms-gateway/pkg/db"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -22,11 +24,18 @@ var (
 
 func SetupAppTest(t *testing.T) (context.Context, func()) {
 	t.Helper()
+	// Skip integration tests if Docker isn't available.
+	if !dockerAvailable() {
+		t.Skip("skipping: docker not available (required for testcontainers)")
+	}
 	ctx := context.Background()
 
-	// change to repo root so migrations resolve
+	// change to repo root so migrations resolve (robust against running tests from any package dir)
 	wd, _ := os.Getwd()
-	repoRoot := filepath.Join(wd, "..", "..")
+	repoRoot, ok := findRepoRoot(wd)
+	if !ok {
+		t.Fatalf("cannot find repo root from wd=%s", wd)
+	}
 	if err := os.Chdir(repoRoot); err != nil {
 		t.Fatalf("chdir repo root: %v", err)
 	}
@@ -82,12 +91,50 @@ func SetupAppTest(t *testing.T) (context.Context, func()) {
 
 func EnsureSetup(t *testing.T) context.Context {
 	t.Helper()
+	// Skip integration tests if Docker isn't available.
+	if !dockerAvailable() {
+		t.Skip("skipping: docker not available (required for testcontainers)")
+	}
+	// If a previous setup attempt left globals nil (e.g., due to a skip/failure), re-init.
+	if app.Echo == nil || app.DB == nil {
+		c, _ := SetupAppTest(t)
+		setupCtx = c
+		return setupCtx
+	}
 	setupOnce.Do(func() {
 		c, _ := SetupAppTest(t)
 		setupCtx = c
 		// intentionally no cleanup to keep DB alive across tests
 	})
 	return setupCtx
+}
+
+func dockerAvailable() bool {
+	c, err := net.DialTimeout("unix", "/var/run/docker.sock", 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+func findRepoRoot(start string) (string, bool) {
+	dir := start
+	for i := 0; i < 12; i++ {
+		goMod := filepath.Join(dir, "go.mod")
+		dbSQL := filepath.Join(dir, "db", "db.sql")
+		if _, err := os.Stat(goMod); err == nil {
+			if _, err := os.Stat(dbSQL); err == nil {
+				return dir, true
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", false
 }
 
 func ResetTables(ctx context.Context, t *testing.T) {
@@ -97,5 +144,8 @@ func ResetTables(ctx context.Context, t *testing.T) {
 	}
 	if _, err := app.DB.ExecContext(ctx, "DELETE FROM user_balances"); err != nil {
 		t.Fatalf("truncate user_balances: %v", err)
+	}
+	if _, err := app.DB.ExecContext(ctx, "DELETE FROM outbox_events"); err != nil {
+		t.Fatalf("truncate outbox_events: %v", err)
 	}
 }

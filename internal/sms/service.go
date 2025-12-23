@@ -11,14 +11,17 @@ import (
 	"sms-gateway/pkg/metrics"
 	"sms-gateway/pkg/tracing"
 	"strings"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type State string
 
 const (
-	Init   State = "init"
-	Done   State = "done"
-	Failed State = "failed"
+	Pending State = "pending"
+	Sending State = "sending"
+	Done    State = "done"
+	Failed  State = "failed"
 )
 
 func sendSms(ctx context.Context, s model.SMS) error {
@@ -29,16 +32,16 @@ func sendSms(ctx context.Context, s model.SMS) error {
 	)
 	defer span.End()
 
-	if err := UpdateSMS(ctx, s, Init); err != nil {
-		app.Logger.Error("err in update sms ", "err", err)
+	if err := UpdateSMSStatus(ctx, s, Sending); err != nil {
+		app.Logger.Error("err in update sms status to sending", "err", err)
 		return err
 	}
 
 	provider, err := operator.Send(ctx, s)
 	if err != nil {
 		app.Logger.Error("err in sending msg to provider", "err", err)
-		if err := UpdateSMS(ctx, s, Failed); err != nil {
-			app.Logger.Error("err in update sms ", "err", err)
+		if err := UpdateSMSStatus(ctx, s, Failed); err != nil {
+			app.Logger.Error("err in update sms status to failed", "err", err)
 			return err
 		}
 		if err := balance.Refund(ctx, s); err != nil {
@@ -48,8 +51,8 @@ func sendSms(ctx context.Context, s model.SMS) error {
 		return err
 	}
 
-	if err := UpdateSMS(ctx, s, Done, provider); err != nil {
-		app.Logger.Error("err in update sms ", "err", err)
+	if err := UpdateSMSStatus(ctx, s, Done, provider); err != nil {
+		app.Logger.Error("err in update sms status to done", "err", err)
 		return err
 	}
 
@@ -58,35 +61,81 @@ func sendSms(ctx context.Context, s model.SMS) error {
 	return nil
 }
 
-func UpdateSMS(ctx context.Context, s model.SMS, state State, provider ...string) error {
+// InsertPendingTx inserts PENDING rows for each recipient inside the given DB transaction.
+// This should be called from the API flow when inserting the outbox event.
+func InsertPendingTx(ctx context.Context, tx *sqlx.Tx, s model.SMS) error {
+	if tx == nil {
+		return errors.New("tx is required")
+	}
 	if len(s.Recipients) == 0 {
-		return errors.New("no  Recipients")
+		return errors.New("no recipients")
+	}
+	if s.SmsIdentifier == "" {
+		return errors.New("sms_identifier is required")
 	}
 
-	var providerName string
+	// Batch insert to reduce roundtrips. Idempotent via unique(sms_identifier,recipient).
+	// If the row already exists, keep it unchanged.
+	const prefix = `INSERT INTO sms_status (user_id,type,status,recipient,provider,sms_identifier,created_at,updated_at) VALUES `
+	const suffix = ` ON DUPLICATE KEY UPDATE updated_at = updated_at`
+	execFn := metrics.DBExecObserver("insert_sms_pending", func(c context.Context) error {
+		valueStrings := make([]string, 0, len(s.Recipients))
+		args := make([]any, 0, len(s.Recipients)*6)
+		for _, recipient := range s.Recipients {
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, '', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+			args = append(args, s.CustomerID, s.Type, Pending, recipient, s.SmsIdentifier)
+		}
+		q := prefix + strings.Join(valueStrings, ",") + suffix
+		_, err := tx.ExecContext(c, q, args...)
+		return err
+	})
+	return execFn(ctx)
+}
+
+// InsertPending inserts PENDING rows for each recipient using the global DB connection.
+func InsertPending(ctx context.Context, s model.SMS) error {
+	tx, err := app.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := InsertPendingTx(ctx, tx, s); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// UpdateSMSStatus updates existing sms_status rows for each recipient.
+// This is used by the consumer/worker: PENDING -> SENDING -> DONE/FAILED.
+func UpdateSMSStatus(ctx context.Context, s model.SMS, state State, provider ...string) error {
+	if len(s.Recipients) == 0 {
+		return errors.New("no recipients")
+	}
+	if s.SmsIdentifier == "" {
+		return errors.New("sms_identifier is required")
+	}
+
+	providerName := ""
 	if len(provider) > 0 {
 		providerName = provider[0]
 	}
 
-	valueStrings := make([]string, 0, len(s.Recipients))
-	valueArgs := make([]any, 0, len(s.Recipients)*5)
-	for _, recipient := range s.Recipients {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
-		valueArgs = append(valueArgs, s.CustomerID, s.Type, state, recipient, providerName, s.SmsIdentifier)
-	}
-	query := ` INSERT INTO sms_status 
-				(user_id,type, status, recipient, provider, sms_identifier, created_at, updated_at) 
-				VALUES ` + strings.Join(valueStrings, ",")
-
-	execFn := metrics.DBExecObserver("insert_sms_status", func(c context.Context) error {
-		_, err := app.DB.ExecContext(c, query, valueArgs...)
+	// Batch update recipients in one query.
+	const qPrefix = `UPDATE sms_status SET status = ?, provider = ?, updated_at = CURRENT_TIMESTAMP WHERE sms_identifier = ? AND recipient IN (`
+	execFn := metrics.DBExecObserver("update_sms_status", func(c context.Context) error {
+		placeholders := make([]string, 0, len(s.Recipients))
+		args := make([]any, 0, 3+len(s.Recipients))
+		args = append(args, state, providerName, s.SmsIdentifier)
+		for _, recipient := range s.Recipients {
+			placeholders = append(placeholders, "?")
+			args = append(args, recipient)
+		}
+		q := qPrefix + strings.Join(placeholders, ",") + `)`
+		_, err := app.DB.ExecContext(c, q, args...)
 		return err
 	})
-	if err := execFn(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return execFn(ctx)
 }
 
 type UserHistory struct {

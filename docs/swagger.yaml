@@ -110,7 +110,7 @@ paths:
         name: user_id
         required: true
         type: string
-      - description: Filter by status (init|done|failed)
+      - description: Filter by status (pending|sending|done|failed)
         in: query
         name: status
         type: string

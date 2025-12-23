@@ -126,7 +126,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by status (init|done|failed)",
+                        "description": "Filter by status (pending|sending|done|failed)",
                         "name": "status",
                         "in": "query"
                     },
@@ -275,7 +275,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "SMS Gateway API For Arvan ",
+	Title:            "SMS Gateway API",
 	Description:      "Simple SMS gateway with balance management and operator failover.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

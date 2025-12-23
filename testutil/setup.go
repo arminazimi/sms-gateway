@@ -12,6 +12,11 @@ import (
 
 func MySQL(ctx context.Context, tb *testing.T) (tc.Container, string, int) {
 	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Skipf("skipping: docker/testcontainers not available (%v)", r)
+		}
+	}()
 	req := tc.ContainerRequest{
 		Image:        "mysql:8.4",
 		ExposedPorts: []string{"3306/tcp"},
@@ -25,7 +30,7 @@ func MySQL(ctx context.Context, tb *testing.T) (tc.Container, string, int) {
 	}
 	mysqlC, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{ContainerRequest: req, Started: true})
 	if err != nil {
-		tb.Fatalf("mysql container: %v", err)
+		tb.Skipf("skipping: docker/testcontainers not available (%v)", err)
 	}
 	host, err := mysqlC.Host(ctx)
 	if err != nil {
@@ -40,6 +45,11 @@ func MySQL(ctx context.Context, tb *testing.T) (tc.Container, string, int) {
 
 func Rabbit(ctx context.Context, t *testing.T) (tc.Container, string, int) {
 	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Skipf("skipping: docker/testcontainers not available (%v)", r)
+		}
+	}()
 	req := tc.ContainerRequest{
 		Image:        "rabbitmq:3.13-management",
 		ExposedPorts: []string{"5672/tcp"},
@@ -51,7 +61,7 @@ func Rabbit(ctx context.Context, t *testing.T) (tc.Container, string, int) {
 	}
 	c, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{ContainerRequest: req, Started: true})
 	if err != nil {
-		t.Fatalf("rabbit container: %v", err)
+		t.Skipf("skipping: docker/testcontainers not available (%v)", err)
 	}
 	host, err := c.Host(ctx)
 	if err != nil {

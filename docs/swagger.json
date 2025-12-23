@@ -120,7 +120,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "Filter by status (init|done|failed)",
+                        "description": "Filter by status (pending|sending|done|failed)",
                         "name": "status",
                         "in": "query"
                     },
