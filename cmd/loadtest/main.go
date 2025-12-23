@@ -353,7 +353,11 @@ func seedBalancesDB(ctx context.Context, dsn string, userStart int64, users int6
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "error closing db: %v\n", err)
+		}
+	}()
 
 	db.SetMaxOpenConns(5)
 	db.SetMaxIdleConns(5)
